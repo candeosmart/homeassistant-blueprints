@@ -1,0 +1,133 @@
+blueprint:
+  name: Candeo Modmote - Zigbee2MQTT
+  description: Automate your Candeo Modmote Scene Switch via Zigbee2MQTT.
+  domain: automation
+  input:
+    switch:
+      name: Candeo Modmote
+      description: Candeo Modmote Scene Switch to use
+      selector:
+        entity:
+          integration: mqtt
+          domain:
+            - sensor
+          multiple: false
+    button_one_short_press:
+      name: Single Press - Button 1
+      description: Action to run on button 1 (top left) single press
+      default: []
+      selector:
+        action: {}
+    button_one_double_press:
+      name: Double Press - Button 1
+      description: Action to run on button 1 (top left) double press
+      default: []
+      selector:
+        action: {}
+    button_one_long_press:
+      name: Long Press - Button 1
+      description: Action to run on button 1 (top left) long press
+      default: []
+      selector:
+        action: {}
+    button_two_short_press:
+      name: Single Press - Button 2
+      description: Action to run on button 2 (top right) single press
+      default: []
+      selector:
+        action: {}
+    button_two_double_press:
+      name: Double Press - Button 2
+      description: Action to run on button 2 (top right) double press
+      default: []
+      selector:
+        action: {}
+    button_two_long_press:
+      name: Long Press - Button 2
+      description: Action to run on button 2 (top right) long press
+      default: []
+      selector:
+        action: {}
+    button_three_short_press:
+      name: Single Press - Button 3
+      description: Action to run on button 3 (bottom left) single press
+      default: []
+      selector:
+        action: {}
+    button_three_double_press:
+      name: Double Press - Button 3
+      description: Action to run on button 3 (bottom left) double press
+      default: []
+      selector:
+        action: {}
+    button_three_long_press:
+      name: Long Press - Button 3
+      description: Action to run on button 3 (bottom left) long press
+      default: []
+      selector:
+        action: {}
+    button_four_short_press:
+      name: Single Press - Button 4
+      description: Action to run on button 4 (bottom right) single press
+      default: []
+      selector:
+        action: {}
+    button_four_double_press:
+      name: Double Press - Button 4
+      description: Action to run on button 4 (bottom right) double press
+      default: []
+      selector:
+        action: {}
+    button_four_long_press:
+      name: Long Press - Button 4
+      description: Action to run on button 4 (bottom right) long press
+      default: []
+      selector:
+        action: {}
+  source_url: https://community.home-assistant.io/t/zigbee2mqtt-tuya-4-button-scene-switch-ts0044/274735
+mode: restart
+max_exceeded: silent
+trigger:
+  - platform: state
+    entity_id: !input switch
+    attribute: action
+action:
+  - variables:
+      command: "{{ trigger.to_state.state }}"
+  - choose:
+      - conditions:
+          - "{{ command == '1_single' }}"
+        sequence: !input button_one_short_press
+      - conditions:
+          - "{{ command == '2_single' }}"
+        sequence: !input button_two_short_press
+      - conditions:
+          - "{{ command == '3_single' }}"
+        sequence: !input button_three_short_press
+      - conditions:
+          - "{{ command == '4_single' }}"
+        sequence: !input button_four_short_press
+      - conditions:
+          - "{{ command == '1_double' }}"
+        sequence: !input button_one_double_press
+      - conditions:
+          - "{{ command == '2_double' }}"
+        sequence: !input button_two_double_press
+      - conditions:
+          - "{{ command == '3_double' }}"
+        sequence: !input button_three_double_press
+      - conditions:
+          - "{{ command == '4_double' }}"
+        sequence: !input button_four_double_press
+      - conditions:
+          - "{{ command == '1_hold' }}"
+        sequence: !input button_one_long_press
+      - conditions:
+          - "{{ command == '2_hold' }}"
+        sequence: !input button_two_long_press
+      - conditions:
+          - "{{ command == '3_hold' }}"
+        sequence: !input button_three_long_press
+      - conditions:
+          - "{{ command == '4_hold' }}"
+        sequence: !input button_four_long_press

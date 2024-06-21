@@ -1,0 +1,143 @@
+blueprint:
+  name: ZHA - Candeo Modmote
+  # adapted from luisfmrosa
+  description: Automate your Candeo Modmote using ZHA events.
+  domain: automation
+  input:
+    tuya_4button_switch:
+      name: Candeo Modmote Switch
+      description: Select your Modmote device
+      selector:
+        device:
+          filter:
+            - integration: zha
+              manufacturer: _TZ3000_b3mgfu0d
+              model: TS004F
+            - integration: zha
+              manufacturer: _TZ3000_czuyt8lz
+              model: TS004F
+          multiple: false
+    button_1_click:
+      name: Button 1 click
+      description: Action to run on button upper-left single press
+      default: []
+      selector:
+        action: {}
+    button_1_double_click:
+      name: Button 1 double-click
+      description: Action to run on button upper-left double press
+      default: []
+      selector:
+        action: {}
+    button_1_long_press:
+      name: Button 1 long press
+      description: Action to run on button upper-left long press
+      default: []
+      selector:
+        action: {}
+    button_2_click:
+      name: Button 2 click
+      description: Action to run on button upper-right single press
+      default: []
+      selector:
+        action: {}
+    button_2_double_click:
+      name: Button 2 double-click
+      description: Action to run on button upper-right double press
+      default: []
+      selector:
+        action: {}
+    button_2_long_press:
+      name: Button 2 long press
+      description: Action to run on button upper-right long press
+      default: []
+      selector:
+        action: {}
+    button_3_click:
+      name: Button 3 click
+      description: Action to run on button lower-left single press
+      default: []
+      selector:
+        action: {}
+    button_3_double_click:
+      name: Button 3 double-click
+      description: Action to run on button lower-right double press
+      default: []
+      selector:
+        action: {}
+    button_3_long_press:
+      name: Button 3 long press
+      description: Action to run on button lower-left long press
+      default: []
+      selector:
+        action: {}
+    button_4_click:
+      name: Button 4 click
+      description: Action to run on button lower-right single press
+      default: []
+      selector:
+        action: {}
+    button_4_double_click:
+      name: Button 4 double-click
+      description: Action to run on button lower-right double press
+      default: []
+      selector:
+        action: {}
+    button_4_long_press:
+      name: Button 4 long press
+      description: Action to run on button lower-right long press
+      default: []
+      selector:
+        action: {}
+  source_url: https://community.home-assistant.io/t/zha-ts004f-tuya-4-button-dimmer-switch-blueprint/386465
+mode: parallel
+max_exceeded: silent
+trigger:
+- platform: event
+  event_type: zha_event
+  event_data:
+    device_id: !input tuya_4button_switch
+action:
+- variables:
+    command: '{{ trigger.event.data.command }}'
+    endpoint_id: '{{ trigger.event.data.endpoint_id }}'
+- choose:
+  - conditions: '{{ false }}'
+    sequence:
+    - service: notify.persistent_notification
+      data:
+        message: '{{ endpoint_id }}'
+        title: '{{ command }}'
+  - conditions: '{{ command == ''remote_button_short_press'' }}'
+    sequence:
+    - choose:
+      - conditions: '{{ endpoint_id == 1 }}'
+        sequence: !input button_1_click
+      - conditions: '{{ endpoint_id == 2 }}'
+        sequence: !input button_2_click
+      - conditions: '{{ endpoint_id == 3 }}'
+        sequence: !input button_3_click
+      - conditions: '{{ endpoint_id == 4 }}'
+        sequence: !input button_4_click
+  - conditions: '{{ command == ''remote_button_double_press'' }}'
+    sequence:
+    - choose:
+      - conditions: '{{ endpoint_id == 1 }}'
+        sequence: !input button_1_double_click
+      - conditions: '{{ endpoint_id == 2 }}'
+        sequence: !input button_2_double_click
+      - conditions: '{{ endpoint_id == 3 }}'
+        sequence: !input button_3_double_click
+      - conditions: '{{ endpoint_id == 4 }}'
+        sequence: !input button_4_double_click
+  - conditions: '{{ command == ''remote_button_long_press'' }}'
+    sequence:
+    - choose:
+      - conditions: '{{ endpoint_id == 1 }}'
+        sequence: !input button_1_long_press
+      - conditions: '{{ endpoint_id == 2 }}'
+        sequence: !input button_2_long_press
+      - conditions: '{{ endpoint_id == 3 }}'
+        sequence: !input button_3_long_press
+      - conditions: '{{ endpoint_id == 4 }}'
+        sequence: !input button_4_long_press
