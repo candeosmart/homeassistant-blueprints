@@ -85,7 +85,7 @@ blueprint:
       selector:
         action: {}
   source_url: https://community.home-assistant.io/t/zigbee2mqtt-tuya-4-button-scene-switch-ts0044/274735
-mode: restart
+mode: parallel
 max_exceeded: silent
 trigger:
   - platform: state
