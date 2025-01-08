@@ -1,6 +1,6 @@
 blueprint:
   name: Candeo Modmote - Zigbee2MQTT
-  description: Automate your Candeo Modmote Scene Switch via Zigbee2MQTT.
+  description: Automate your Candeo Modmote Scene Switch via Zigbee2MQTT 2.0.0.
   domain: automation
   input:
     switch:
@@ -84,13 +84,11 @@ blueprint:
       default: []
       selector:
         action: {}
-  source_url: https://community.home-assistant.io/t/zigbee2mqtt-tuya-4-button-scene-switch-ts0044/274735
-mode: parallel
+mode: restart
 max_exceeded: silent
 trigger:
   - platform: state
     entity_id: !input switch
-    attribute: action
 action:
   - variables:
       command: "{{ trigger.to_state.state }}"
