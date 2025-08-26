@@ -1,0 +1,361 @@
+blueprint:
+  name: Candeo C-ZB-RD1P (REM or DPM mode) - Scene/Script Control + Rotary Dimming in ZHA
+  description: >
+    **Scene and script control for C-ZB-RD1P (Remote Mode or Dual Purpose Mode) using ZHA**
+
+    Use a Candeo RD1P in REM mode or DPM mode to toggle lights, cycle your favorite scenes or scripts with a double press, and trigger a dedicated scene or script with a long press.
+    
+    Rotation provides quick dimming of the target lights with adjustable step size and optional transition.
+
+
+    **Features:**
+
+    - **Single press**: Toggles the target lights or group
+    
+    - **Double press**: Activates the current scene/script from your helper selection, then moves to the next (1 → 2 → … → N → 1)
+
+    - **Long press**: Runs a dedicated scene or script
+
+    - **Rotary control:**
+      - ➕ Right rotation brightens by an adjustable step
+      - ➖ Left rotation dims by an adjustable step
+
+
+    ⚡ **Advanced features:**
+
+    - 🧩 Works with both **scenes** and **scripts** via a unified selector
+
+    - 🔧 Customizable brightness step and transition time
+
+    - 🔁 Helper-driven scene/script cycling to keep things predictable
+
+
+    **🛠️ Setup Required:**
+
+    Create a dropdown helper:
+
+    Settings → Devices & Services → Helpers → **Create Helper** → **Dropdown**
+
+    - Name: "RD1P Scene Index"
+    - Options: 1, 2, 3, 4, 5, 6 (set the range to match how many scenes/scripts you configure below)
+
+
+    **How It Works:**
+
+    - **Single Press**: `light.toggle` on your chosen target
+    - **Double Press**: Runs the scene/script whose index matches the helper, then advances the helper to the next option with wrap-around
+    - **Long Press**: Runs the dedicated scene/script (independent of the helper)
+    - **Rotate Knob**: Applies `brightness_step_pct` up or down to the target lights, with optional `transition`
+
+
+    **Requirements:**
+
+    - C-ZB-RD1P device in Remote Mode or Dual Purpose Mode
+    - ZHA with device actions available
+    - Dimmable target lights for rotary dimming
+
+
+    **Version**: 1.0
+
+    **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
+  domain: automation
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    remote_device:
+      name: Candeo RD1-Pro Dimming Switch
+      description: The C-ZB-RD1P device in remote mode or dual purpose mode.
+      selector:
+        device:
+          filter:
+            - integration: zha
+              manufacturer: Candeo
+              model: C-ZB-RD1P-REM
+            - integration: zha
+              manufacturer: Candeo
+              model: C-ZB-RD1P-DPM
+
+    scene_helper:
+      name: Scene Cycle Helper (Your Helper)
+      description: "Input select dropdown whose options are numeric strings, e.g. 1..N, matching the scenes/scripts you configure below."
+      selector:
+        entity:
+          filter:
+            domain: input_select
+
+    target_lights:
+      name: Target Lights or Group
+      description: "Light, light group, or area to be toggled and dimmed by the rotary knob."
+      selector:
+        target:
+          entity:
+            domain: light
+
+    # Scenes / Scripts (use either domain; homeassistant.turn_on supports both)
+    scene_or_script_1:
+      name: Scene/Script 1
+      description: "Required. Runs when the helper is '1'."
+      default: {}
+      selector:
+        target:
+          entity:
+            domain:
+              - scene
+              - script
+
+    scene_or_script_2:
+      name: Scene/Script 2 (optional)
+      default: {}
+      selector:
+        target:
+          entity:
+            domain:
+              - scene
+              - script
+
+    scene_or_script_3:
+      name: Scene/Script 3 (optional)
+      default: {}
+      selector:
+        target:
+          entity:
+            domain:
+              - scene
+              - script
+
+    scene_or_script_4:
+      name: Scene/Script 4 (optional)
+      default: {}
+      selector:
+        target:
+          entity:
+            domain:
+              - scene
+              - script
+
+    scene_or_script_5:
+      name: Scene/Script 5 (optional)
+      default: {}
+      selector:
+        target:
+          entity:
+            domain:
+              - scene
+              - script
+
+    scene_or_script_6:
+      name: Scene/Script 6 (optional)
+      default: {}
+      selector:
+        target:
+          entity:
+            domain:
+              - scene
+              - script
+
+    long_press_action:
+      name: Long Press Scene/Script (optional)
+      description: "Runs on long press; leave empty to do nothing."
+      default: {}
+      selector:
+        target:
+          entity:
+            domain:
+              - scene
+              - script
+
+    # Dimming controls
+    brightness_step_pct:
+      name: Brightness Step Percentage
+      description: "Percentage step for brightness adjustments when rotating right/left."
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          unit_of_measurement: "%"
+
+    negative_brightness:
+      name: Negative Brightness Step
+      description: "Stores the negative value of brightness_step_pct for dimming down."
+      default: -10
+      selector:
+        number:
+          min: -50
+          max: -1
+          unit_of_measurement: "%"
+
+    transition_seconds:
+      name: Transition (seconds)
+      description: "Optional fade time applied on rotary dimming steps. Set to 0 for instant changes."
+      default: 0.3
+      selector:
+        number:
+          min: 0
+          max: 5
+          step: 0.1
+          unit_of_measurement: "s"
+
+mode: single
+
+triggers:
+  # Press events
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Pressed"
+    subtype: "Rotary knob"
+    id: pressed
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Double pressed"
+    subtype: "Rotary knob"
+    id: double_pressed
+
+  # Long press (cover both common labels)
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Long pressed"
+    subtype: "Rotary knob"
+    id: long_press
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Held"
+    subtype: "Rotary knob"
+    id: long_press
+
+  # Rotation events (right)
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Started rotating right"
+    subtype: "Rotary knob"
+    id: started_rotating_right
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Rotating right"
+    subtype: "Rotary knob"
+    id: started_rotating_right
+
+  # Rotation events (left)
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Started rotating left"
+    subtype: "Rotary knob"
+    id: started_rotating_left
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Rotating left"
+    subtype: "Rotary knob"
+    id: started_rotating_left
+
+condition: []
+
+action:
+  - choose:
+      # Single press -> toggle lights
+      - conditions:
+          - condition: trigger
+            id: pressed
+        sequence:
+          - action: light.toggle
+            target: !input target_lights
+
+      # Double press -> run current scene/script based on helper, then advance helper
+      - conditions:
+          - condition: trigger
+            id: double_pressed
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: !input scene_helper
+                    state: "1"
+                sequence:
+                  - action: homeassistant.turn_on
+                    target: !input scene_or_script_1
+              - conditions:
+                  - condition: state
+                    entity_id: !input scene_helper
+                    state: "2"
+                sequence:
+                  - action: homeassistant.turn_on
+                    target: !input scene_or_script_2
+              - conditions:
+                  - condition: state
+                    entity_id: !input scene_helper
+                    state: "3"
+                sequence:
+                  - action: homeassistant.turn_on
+                    target: !input scene_or_script_3
+              - conditions:
+                  - condition: state
+                    entity_id: !input scene_helper
+                    state: "4"
+                sequence:
+                  - action: homeassistant.turn_on
+                    target: !input scene_or_script_4
+              - conditions:
+                  - condition: state
+                    entity_id: !input scene_helper
+                    state: "5"
+                sequence:
+                  - action: homeassistant.turn_on
+                    target: !input scene_or_script_5
+              - conditions:
+                  - condition: state
+                    entity_id: !input scene_helper
+                    state: "6"
+                sequence:
+                  - action: homeassistant.turn_on
+                    target: !input scene_or_script_6
+          - action: input_select.select_next
+            target:
+              entity_id: !input scene_helper
+            data:
+              cycle: true
+
+      # Long press -> run dedicated scene/script if provided
+      - conditions:
+          - condition: trigger
+            id: long_press
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ (dict((!input long_press_action)).values() | list | length) > 0 }}
+                sequence:
+                  - action: homeassistant.turn_on
+                    target: !input long_press_action
+
+      # Rotation right -> brighten
+      - conditions:
+          - condition: trigger
+            id: started_rotating_right
+        sequence:
+          - action: light.turn_on
+            target: !input target_lights
+            data:
+              brightness_step_pct: !input brightness_step_pct
+              transition: !input transition_seconds
+
+      # Rotation left -> dim
+      - conditions:
+          - condition: trigger
+            id: started_rotating_left
+        sequence:
+          - action: light.turn_on
+            target: !input target_lights
+            data:
+              brightness_step_pct: !input negative_brightness
+              transition: !input transition_seconds
+

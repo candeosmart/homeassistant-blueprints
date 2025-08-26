@@ -1,0 +1,434 @@
+blueprint:
+  name: Candeo C-ZB-RD1P (REM or DPM mode) - 3-function Smart Bulb Control in ZHA
+  description: >
+    **Smart Bulb control for C-ZB-RD1P (Remote Mode or Dual Purpose Mode) using ZHA**
+
+    Use a Candeo RD1P in either REM mode or DPM mode to control your smart bulbs - on/off state, brightness, white temp, or colour.
+
+
+    **Features:**
+
+    - **Single press**: Toggles target lights on/off
+
+    - **Double press**: Cycles through control modes (brightness / white temperature / colour)
+
+    - **Rotary control:**
+      - ☀️ In **Brightness mode** - adjusts light brightness
+      - 🌡️ In **White balance mode** - adjusts color temperature (warm ↔ cool)
+      - 🎨 In **Colour mode** - cycles through hue spectrum
+
+
+    ⚡ **Advanced features:**
+
+    - 🏠 Works with individual lights, groups, or areas
+
+    - 🔧 Customizable step sizes for precise control
+
+    - 🔄 Smooth mode cycling with visual feedback
+
+    - ⚙️ Context-sensitive control based on current mode
+
+
+    **🛠️ Setup Required:**
+
+    Before using this blueprint, create this helper:
+
+    Settings → Devices & Services → Helpers
+
+    "Create Helper" → "Dropdown"
+
+    - Name: "Candeo RD1P Remote Control Mode"
+
+    - Options: brightness, white_temp, colour
+
+
+    **How It Works:**
+
+    - **Single Press**: Toggles the chosen lights on/off  
+    - **Double Press**: Cycles through the modes (brightness → white temp → colour → brightness...)
+    - **Rotate Knob**: Context-sensitive control based on current mode
+    - **Feedback**: Notifications show current mode after changes
+
+
+    **Requirements:**
+
+    - C-ZB-RD1P device must be in Remote Mode or Dual Purpose Mode
+    - Compatible smart lights with brightness/color temperature/color support
+    - Input select helper for mode tracking
+
+
+    **Version**: 1.0
+
+    **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
+
+  domain: automation
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    device_section:
+      name: Device & Target Selection
+      icon: mdi:devices
+      description: Select your RD1P device, target lights, and mode helper
+      input:
+        remote_device:
+          name: C-ZB-RD1P Remote Device
+          description: The C-ZB-RD1P device in remote mode or dual purpose mode.
+          selector:
+            device:
+              filter:
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1P-REM
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1P-DPM
+
+        target_lights:
+          name: Target Lights
+          description: Light, light group, or area to control with the rotary remote
+          selector:
+            target:
+              entity:
+                domain: light
+
+        mode_helper:
+          name: Mode Helper
+          description: Input select helper to track current control mode (brightness/white_temp/colour)
+          selector:
+            entity:
+              filter:
+                - domain: input_select
+
+    control_section:
+      name: Control Settings
+      icon: mdi:tune
+      description: Configure how much each rotation step changes your lights
+      input:
+        brightness_step:
+          name: Brightness Step
+          description: How much to change brightness per rotation step (1-50%)
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 50
+              unit_of_measurement: "%"
+
+        color_temp_step:
+          name: Color Temperature Step
+          description: How much to change color temperature per rotation step (10-100 mired)
+          default: 25
+          selector:
+            number:
+              min: 10
+              max: 100
+              unit_of_measurement: "mired"
+
+        hue_step:
+          name: Hue Step
+          description: How much to change hue per rotation step in colour mode (5-60 degrees)
+          default: 15
+          selector:
+            number:
+              min: 5
+              max: 60
+              unit_of_measurement: "degrees"
+
+    advanced_section:
+      name: Advanced Options
+      icon: mdi:cog
+      description: Optional settings for enhanced functionality
+      collapsed: true
+      input:
+        show_notifications:
+          name: Show Mode Notifications
+          description: Display notifications when switching between modes
+          default: true
+          selector:
+            boolean:
+
+mode: single
+max_exceeded: silent
+
+variables:
+  target_lights: !input target_lights
+  brightness_step: !input brightness_step
+  color_temp_step: !input color_temp_step
+  hue_step: !input hue_step
+  show_notifications: !input show_notifications
+
+triggers:
+  # Single Press - Toggle
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Pressed"
+    subtype: "Rotary knob"
+    id: toggle_lights
+
+  # Double Press - Mode Cycle
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Double pressed"
+    subtype: "Rotary knob"
+    id: cycle_mode
+
+  # Rotation Right (treat started and rotating the same)
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Started rotating right"
+    subtype: "Rotary knob"
+    id: rotate_right
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Rotating right"
+    subtype: "Rotary knob"
+    id: rotate_right
+
+  # Rotation Left (treat started and rotating the same)
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Started rotating left"
+    subtype: "Rotary knob"
+    id: rotate_left
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Rotating left"
+    subtype: "Rotary knob"
+    id: rotate_left
+
+action:
+  - choose:
+      # Toggle Lights
+      - conditions:
+          - condition: trigger
+            id: toggle_lights
+        sequence:
+          - action: light.toggle
+            target: "{{ target_lights }}"
+
+      # Mode Cycling
+      - conditions:
+          - condition: trigger
+            id: cycle_mode
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: !input mode_helper
+                    state: "brightness"
+                sequence:
+                  - action: input_select.select_option
+                    target:
+                      entity_id: !input mode_helper
+                    data:
+                      option: "white_temp"
+                  - if:
+                      - condition: template
+                        value_template: "{{ show_notifications }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "RD1P Remote Control"
+                          message: "Mode: White Temperature Control 🌡️"
+                          notification_id: "rd1p_mode"
+
+              - conditions:
+                  - condition: state
+                    entity_id: !input mode_helper
+                    state: "white_temp"
+                sequence:
+                  - action: input_select.select_option
+                    target:
+                      entity_id: !input mode_helper
+                    data:
+                      option: "colour"
+                  - if:
+                      - condition: template
+                        value_template: "{{ show_notifications }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "RD1P Remote Control"
+                          message: "Mode: Colour Control 🎨"
+                          notification_id: "rd1p_mode"
+
+              - conditions:
+                  - condition: state
+                    entity_id: !input mode_helper
+                    state: "colour"
+                sequence:
+                  - action: input_select.select_option
+                    target:
+                      entity_id: !input mode_helper
+                    data:
+                      option: "brightness"
+                  - if:
+                      - condition: template
+                        value_template: "{{ show_notifications }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "RD1P Remote Control"
+                          message: "Mode: Brightness Control ☀️"
+                          notification_id: "rd1p_mode"
+
+            default:
+              - action: input_select.select_option
+                target:
+                  entity_id: !input mode_helper
+                data:
+                  option: "brightness"
+              - if:
+                  - condition: template
+                    value_template: "{{ show_notifications }}"
+                then:
+                  - action: persistent_notification.create
+                    data:
+                      title: "RD1P Remote Control"
+                      message: "Mode: Brightness Control ☀️"
+                      notification_id: "rd1p_mode"
+
+      # Rotate Right
+      - conditions:
+          - condition: trigger
+            id: rotate_right
+        sequence:
+          - choose:
+              # Brightness Mode
+              - conditions:
+                  - condition: state
+                    entity_id: !input mode_helper
+                    state: "brightness"
+                sequence:
+                  - action: light.turn_on
+                    target: "{{ target_lights }}"
+                    data:
+                      brightness_step_pct: "{{ brightness_step }}"
+
+              # White Temperature Mode
+              - conditions:
+                  - condition: state
+                    entity_id: !input mode_helper
+                    state: "white_temp"
+                sequence:
+                  - action: light.turn_on
+                    target: "{{ target_lights }}"
+                    data:
+                      color_temp: >
+                        {% if target_lights.entity_id is defined %}
+                          {% set entity = target_lights.entity_id %}
+                        {% elif target_lights.area_id is defined %}
+                          {% set entity = area_entities(target_lights.area_id) | select('match', 'light\.') | list | first %}
+                        {% else %}
+                          {% set entity = expand(target_lights.entity_id) | map(attribute='entity_id') | list | first %}
+                        {% endif %}
+                        {% if entity %}
+                          {% set current = state_attr(entity, 'color_temp') | int(250) %}
+                          {% set new_temp = current + color_temp_step %}
+                          {% if new_temp > 500 %}500{% else %}{{ new_temp }}{% endif %}
+                        {% else %}
+                          250
+                        {% endif %}
+
+              # Colour Mode (Hue)
+              - conditions:
+                  - condition: state
+                    entity_id: !input mode_helper
+                    state: "colour"
+                sequence:
+                  - action: light.turn_on
+                    target: "{{ target_lights }}"
+                    data:
+                      hs_color: >
+                        {% if target_lights.entity_id is defined %}
+                          {% set current_hue = state_attr(target_lights.entity_id, 'hs_color')[0] | int(0) if state_attr(target_lights.entity_id, 'hs_color') else 0 %}
+                          {% set current_sat = state_attr(target_lights.entity_id, 'hs_color')[1] | int(100) if state_attr(target_lights.entity_id, 'hs_color') else 100 %}
+                          {% set new_hue = (current_hue + hue_step) % 360 %}
+                          [{{ new_hue }}, {{ current_sat }}]
+                        {% else %}
+                          {% set entity = area_entities(target_lights.area_id) | select('match', 'light\.') | list | first if target_lights.area_id is defined else (expand(target_lights.entity_id) | map(attribute='entity_id') | list | first) %}
+                          {% if entity %}
+                            {% set current_hue = state_attr(entity, 'hs_color')[0] | int(0) if state_attr(entity, 'hs_color') else 0 %}
+                            {% set current_sat = state_attr(entity, 'hs_color')[1] | int(100) if state_attr(entity, 'hs_color') else 100 %}
+                            {% set new_hue = (current_hue + hue_step) % 360 %}
+                            [{{ new_hue }}, {{ current_sat }}]
+                          {% else %}
+                            [0, 100]
+                          {% endif %}
+                        {% endif %}
+
+      # Rotate Left
+      - conditions:
+          - condition: trigger
+            id: rotate_left
+        sequence:
+          - choose:
+              # Brightness Mode
+              - conditions:
+                  - condition: state
+                    entity_id: !input mode_helper
+                    state: "brightness"
+                sequence:
+                  - action: light.turn_on
+                    target: "{{ target_lights }}"
+                    data:
+                      brightness_step_pct: "{{ -brightness_step }}"
+
+              # White Temperature Mode
+              - conditions:
+                  - condition: state
+                    entity_id: !input mode_helper
+                    state: "white_temp"
+                sequence:
+                  - action: light.turn_on
+                    target: "{{ target_lights }}"
+                    data:
+                      color_temp: >
+                        {% if target_lights.entity_id is defined %}
+                          {% set entity = target_lights.entity_id %}
+                        {% elif target_lights.area_id is defined %}
+                          {% set entity = area_entities(target_lights.area_id) | select('match', 'light\.') | list | first %}
+                        {% else %}
+                          {% set entity = expand(target_lights.entity_id) | map(attribute='entity_id') | list | first %}
+                        {% endif %}
+                        {% if entity %}
+                          {% set current = state_attr(entity, 'color_temp') | int(250) %}
+                          {% set new_temp = current - color_temp_step %}
+                          {% if new_temp < 153 %}153{% else %}{{ new_temp }}{% endif %}
+                        {% else %}
+                          250
+                        {% endif %}
+
+              # Colour Mode (Hue)
+              - conditions:
+                  - condition: state
+                    entity_id: !input mode_helper
+                    state: "colour"
+                sequence:
+                  - action: light.turn_on
+                    target: "{{ target_lights }}"
+                    data:
+                      hs_color: >
+                        {% if target_lights.entity_id is defined %}
+                          {% set current_hue = state_attr(target_lights.entity_id, 'hs_color')[0] | int(0) if state_attr(target_lights.entity_id, 'hs_color') else 0 %}
+                          {% set current_sat = state_attr(target_lights.entity_id, 'hs_color')[1] | int(100) if state_attr(target_lights.entity_id, 'hs_color') else 100 %}
+                          {% set new_hue = (current_hue - hue_step) % 360 %}
+                          [{{ new_hue }}, {{ current_sat }}]
+                        {% else %}
+                          {% set entity = area_entities(target_lights.area_id) | select('match', 'light\.') | list | first if target_lights.area_id is defined else (expand(target_lights.entity_id) | map(attribute='entity_id') | list | first) %}
+                          {% if entity %}
+                            {% set current_hue = state_attr(entity, 'hs_color')[0] | int(0) if state_attr(entity, 'hs_color') else 0 %}
+                            {% set current_sat = state_attr(entity, 'hs_color')[1] | int(100) if state_attr(entity, 'hs_color') else 100 %}
+                            {% set new_hue = (current_hue - hue_step) % 360 %}
+                            [{{ new_hue }}, {{ current_sat }}]
+                          {% else %}
+                            [0, 100]
+                          {% endif %}
+                        {% endif %}

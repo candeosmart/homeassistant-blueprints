@@ -1,0 +1,356 @@
+blueprint:
+  name: Candeo C-ZB-RD1P (REM or DPM mode) - 3-Light Selector and Dimming Control in ZHA
+  description: >
+    **3-light control for C-ZB-RD1P (Remote Mode or Dual Purpose Mode) using ZHA**
+
+    Use a Candeo RD1P in REM mode or DPM mode to control three smart lights from a single rotary knob.
+    
+    A helper selects which light is active so the knob only affects that light.  
+    
+    Single press toggles the selected light, double press moves to the next light, and rotation adjusts brightness.
+
+    
+    **Features:**
+
+    - **Single press**: Toggles the selected light on or off
+    
+    - **Double press**: Cycles the selection (1 → 2 → 3 → 1)
+
+    - **Rotary control:**
+      - ➕ Right rotation brightens by an adjustable step
+      - ➖ Left rotation dims by an adjustable step
+
+    ⚡ **Advanced features:**
+
+    - 💡 Designed for individual lights
+
+    - 🔄 Responds to **Started rotating left/right** and **Rotating left/right** actions for smooth dimming
+
+    - 🧠 Helper-driven selection keeps control predictable and simple
+
+
+    **🛠️ Setup Required:**
+
+    Before using this blueprint, create this helper:
+
+    Settings → Devices & Services → Helpers
+
+    "Create Helper" → "Dropdown"
+
+    - Name: "RD1P Selected Light"
+
+    - Options: 1, 2, 3
+
+    **How It Works:**
+
+    - **Single Press**: Toggles only the currently selected light
+
+    - **Double Press**: Updates the helper to the next option and wraps around
+
+    - **Rotate Knob**: Applies `brightness_step_pct` up or down to the selected light
+
+
+    **Requirements:**
+
+    - C-ZB-RD1P device in Remote Mode or Dual Purpose Mode
+
+    - ZHA with device actions available
+
+    - Dimmable target lights
+
+    **Version**: 1.6
+
+    **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
+  domain: automation
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    remote_device:
+      name: Candeo RD1-Pro Dimming Switch
+      description: The C-ZB-RD1P device in remote mode or dual purpose mode.
+      selector:
+        device:
+          filter:
+            - integration: zha
+              manufacturer: Candeo
+              model: C-ZB-RD1P-REM
+            - integration: zha
+              manufacturer: Candeo
+              model: C-ZB-RD1P-DPM
+
+    dimming_select:
+      name: Dimming Light Selector (Your Helper)
+      description: "Input select entity that determines which light is dimmed."
+      selector:
+        entity:
+          filter:
+            domain: input_select
+
+    light_1:
+      name: Light 1
+      description: "First light to control."
+      default: {}
+      selector:
+        target:
+          entity:
+            domain: light
+
+    light_2:
+      name: Light 2
+      description: "Second light to control."
+      default: {}
+      selector:
+        target:
+          entity:
+            domain: light
+
+    enable_light_3:
+      name: Enable Light 3
+      description: "Turn on to use Light 3 and include '3' in the selection cycle."
+      default: false
+      selector:
+        boolean:
+
+    light_3:
+      name: Light 3
+      description: "Third light to control (optional). Enable above if you want to use it."
+      default: {}
+      selector:
+        target:
+          entity:
+            domain: light
+
+    brightness_step_pct:
+      name: Brightness Step Percentage
+      description: "Percentage step for brightness adjustments."
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+
+    negative_brightness:
+      name: Negative Brightness Step
+      description: "Stores the negative value of brightness_step_pct for dimming down."
+      default: -5
+      selector:
+        number:
+          min: -100
+          max: -1
+          unit_of_measurement: "%"
+
+mode: single
+
+variables:
+  enable_light_3: !input enable_light_3
+
+triggers:
+  # Press events
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Pressed"
+    subtype: "Rotary knob"
+    id: pressed
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Double pressed"
+    subtype: "Rotary knob"
+    id: double_pressed
+
+  # Rotation events (right)
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Started rotating right"
+    subtype: "Rotary knob"
+    id: started_rotating_right
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Rotating right"
+    subtype: "Rotary knob"
+    id: started_rotating_right
+
+  # Rotation events (left)
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Started rotating left"
+    subtype: "Rotary knob"
+    id: started_rotating_left
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: "Rotating left"
+    subtype: "Rotary knob"
+    id: started_rotating_left
+
+condition: []
+
+action:
+  - choose:
+      # Single press -> toggle selected light
+      - conditions:
+          - condition: trigger
+            id: pressed
+          - condition: state
+            entity_id: !input dimming_select
+            state: "1"
+        sequence:
+          - action: light.toggle
+            target: !input light_1
+
+      - conditions:
+          - condition: trigger
+            id: pressed
+          - condition: state
+            entity_id: !input dimming_select
+            state: "2"
+        sequence:
+          - action: light.toggle
+            target: !input light_2
+
+      - conditions:
+          - condition: trigger
+            id: pressed
+          - condition: template
+            value_template: "{{ enable_light_3 }}"
+          - condition: state
+            entity_id: !input dimming_select
+            state: "3"
+        sequence:
+          - action: light.toggle
+            target: !input light_3
+
+      # Double press -> cycle helper (skip 3 if disabled)
+      - conditions:
+          - condition: trigger
+            id: double_pressed
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ enable_light_3 }}"
+                sequence:
+                  - action: input_select.select_next
+                    target:
+                      entity_id: !input dimming_select
+                    data:
+                      cycle: true
+            default:
+              - choose:
+                  - conditions:
+                      - condition: state
+                        entity_id: !input dimming_select
+                        state: "1"
+                    sequence:
+                      - action: input_select.select_option
+                        target:
+                          entity_id: !input dimming_select
+                        data:
+                          option: "2"
+                  - conditions:
+                      - condition: state
+                        entity_id: !input dimming_select
+                        state: "2"
+                    sequence:
+                      - action: input_select.select_option
+                        target:
+                          entity_id: !input dimming_select
+                        data:
+                          option: "1"
+                  - conditions:
+                      - condition: state
+                        entity_id: !input dimming_select
+                        state: "3"
+                    sequence:
+                      - action: input_select.select_option
+                        target:
+                          entity_id: !input dimming_select
+                        data:
+                          option: "1"
+
+      # Rotate right -> brighten selected light
+      - conditions:
+          - condition: trigger
+            id: started_rotating_right
+          - condition: state
+            entity_id: !input dimming_select
+            state: "1"
+        sequence:
+          - action: light.turn_on
+            target: !input light_1
+            data:
+              brightness_step_pct: !input brightness_step_pct
+
+      - conditions:
+          - condition: trigger
+            id: started_rotating_right
+          - condition: state
+            entity_id: !input dimming_select
+            state: "2"
+        sequence:
+          - action: light.turn_on
+            target: !input light_2
+            data:
+              brightness_step_pct: !input brightness_step_pct
+
+      - conditions:
+          - condition: trigger
+            id: started_rotating_right
+          - condition: template
+            value_template: "{{ enable_light_3 }}"
+          - condition: state
+            entity_id: !input dimming_select
+            state: "3"
+        sequence:
+          - action: light.turn_on
+            target: !input light_3
+            data:
+              brightness_step_pct: !input brightness_step_pct
+
+      # Rotate left -> dim selected light
+      - conditions:
+          - condition: trigger
+            id: started_rotating_left
+          - condition: state
+            entity_id: !input dimming_select
+            state: "1"
+        sequence:
+          - action: light.turn_on
+            target: !input light_1
+            data:
+              brightness_step_pct: !input negative_brightness
+
+      - conditions:
+          - condition: trigger
+            id: started_rotating_left
+          - condition: state
+            entity_id: !input dimming_select
+            state: "2"
+        sequence:
+          - action: light.turn_on
+            target: !input light_2
+            data:
+              brightness_step_pct: !input negative_brightness
+
+      - conditions:
+          - condition: trigger
+            id: started_rotating_left
+          - condition: template
+            value_template: "{{ enable_light_3 }}"
+          - condition: state
+            entity_id: !input dimming_select
+            state: "3"
+        sequence:
+          - action: light.turn_on
+            target: !input light_3
+            data:
+              brightness_step_pct: !input negative_brightness
