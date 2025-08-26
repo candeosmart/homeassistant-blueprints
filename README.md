@@ -1,5 +1,5 @@
 
-##4 Blueprints for the RD1-Pro (C-ZB-RD1P) Decoupled Dimming Switch##
+## 4 Blueprints for the RD1-Pro (C-ZB-RD1P) Decoupled Dimming Switch ##
 
 
 **Control your smart lights brightness, colour, and white temperature – all from a single switch.**
@@ -61,7 +61,7 @@ zigbee2mqtt
 
 
 
-##Modmote Scene Switch Blueprint##
+## Modmote Scene Switch Blueprint ##
 
 A Blueprint to allow easy scene switch configuration for your Candeo Modmote, with press, double press, and hold - for each of the 4 buttons.
 
