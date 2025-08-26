@@ -1,0 +1,272 @@
+blueprint:
+  name: Candeo C-ZB-RD1P (REM or DPM mode) - 3-Light Selector and Dimming Control in zigbee2mqtt
+  description: >
+    **3-light control for C-ZB-RD1P (Remote Mode or Dual Purpose Mode) using zigbee2mqtt**
+
+    Use a Candeo RD1P in REM mode or DPM mode to control three smart lights from a single rotary knob.
+    
+    A helper selects which light is active so the knob only affects that light.  
+    
+    Single press toggles the selected light, double press moves to the next light, and rotation adjusts brightness.
+
+    
+    **Features:**
+
+    - **Single press**: Toggles the selected light on or off
+    
+    - **Double press**: Cycles the selection (1 → 2 → 3 → 1)
+
+    - **Rotary control:**
+      - ➕ Right rotation brightens by an adjustable step
+      - ➖ Left rotation dims by an adjustable step
+
+    ⚡ **Advanced features:**
+
+    - 💡 Designed for individual lights
+
+    - 🔄 Responds to **started_rotating_left/right** actions for smooth dimming
+
+    - 🧠 Helper-driven selection keeps control predictable and simple
+
+
+    **🛠️ Setup Required:**
+
+    Before using this blueprint, create this helper:
+
+    Settings → Devices & Services → Helpers
+
+    "Create Helper" → "Dropdown"
+
+    - Name: "RD1P Selected Light"
+
+    - Options: 1, 2, 3
+
+    **How It Works:**
+
+    - **Single Press**: Toggles only the currently selected light
+
+    - **Double Press**: Updates the helper to the next option and wraps around
+
+    - **Rotate Knob**: Applies `brightness_step_pct` up or down to the selected light
+
+
+    **Requirements:**
+
+    - C-ZB-RD1P device in Remote Mode or Dual Purpose Mode
+
+    - zigbee2mqtt with action events available
+
+    - Dimmable target lights
+
+    **Version**: 1.5
+
+    **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
+  domain: automation
+  input:
+    remote_device:
+      name: C-ZB-RD1P Remote Device
+      description: The C-ZB-RD1P device in remote mode or dual purpose mode.
+      selector:
+        device:
+          filter:
+            - model_id: C-ZB-RD1P-REM
+            - model_id: C-ZB-RD1P-DPM
+    light_1:
+      name: Light 1
+      description: "First light to control."
+      selector:
+        entity:
+          filter:
+            domain: light
+    light_2:
+      name: Light 2
+      description: "Second light to control."
+      selector:
+        entity:
+          filter:
+            domain: light
+    light_3:
+      name: Light 3
+      description: "Third light to control."
+      selector:
+        entity:
+          filter:
+            domain: light
+    brightness_step_pct:
+      name: Brightness Step Percentage
+      description: "Percentage step for brightness adjustments."
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    dimming_select:
+      name: Dimming Light Selector
+      description: "Input select entity that determines which light is dimmed."
+      selector:
+        entity:
+          filter:
+            domain: input_select
+    negative_brightness:
+      name: Negative Brightness Step
+      description: "Stores the negative value of brightness_step_pct for dimming down."
+      default: -5
+      selector:
+        number:
+          min: -100
+          max: -1
+          unit_of_measurement: "%"
+
+mode: single
+triggers:
+  # Press events (from rd1p_knob_press)
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: pressed
+    id: pressed
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: double_pressed
+    id: double_pressed
+
+  # Rotation events (from rd1p_knob_rotation)
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: started_rotating_right
+    id: started_rotating_right
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: started_rotating_left
+    id: started_rotating_left
+
+condition: []
+
+action:
+  - choose:
+      # Single press -> toggle selected light
+      - conditions:
+          - condition: trigger
+            id: pressed
+          - condition: state
+            entity_id: !input dimming_select
+            state: "1"
+        sequence:
+          - action: light.toggle
+            target:
+              entity_id: !input light_1
+      - conditions:
+          - condition: trigger
+            id: pressed
+          - condition: state
+            entity_id: !input dimming_select
+            state: "2"
+        sequence:
+          - action: light.toggle
+            target:
+              entity_id: !input light_2
+      - conditions:
+          - condition: trigger
+            id: pressed
+          - condition: state
+            entity_id: !input dimming_select
+            state: "3"
+        sequence:
+          - action: light.toggle
+            target:
+              entity_id: !input light_3
+
+      # Double press -> cycle helper
+      - conditions:
+          - condition: trigger
+            id: double_pressed
+        sequence:
+          - action: input_select.select_next
+            target:
+              entity_id: !input dimming_select
+            data:
+              cycle: true
+
+      # Rotate right -> brighten selected light
+      - conditions:
+          - condition: trigger
+            id: started_rotating_right
+          - condition: state
+            entity_id: !input dimming_select
+            state: "1"
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input light_1
+            data:
+              brightness_step_pct: !input brightness_step_pct
+      - conditions:
+          - condition: trigger
+            id: started_rotating_right
+          - condition: state
+            entity_id: !input dimming_select
+            state: "2"
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input light_2
+            data:
+              brightness_step_pct: !input brightness_step_pct
+      - conditions:
+          - condition: trigger
+            id: started_rotating_right
+          - condition: state
+            entity_id: !input dimming_select
+            state: "3"
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input light_3
+            data:
+              brightness_step_pct: !input brightness_step_pct
+
+      # Rotate left -> dim selected light
+      - conditions:
+          - condition: trigger
+            id: started_rotating_left
+          - condition: state
+            entity_id: !input dimming_select
+            state: "1"
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input light_1
+            data:
+              brightness_step_pct: !input negative_brightness
+      - conditions:
+          - condition: trigger
+            id: started_rotating_left
+          - condition: state
+            entity_id: !input dimming_select
+            state: "2"
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input light_2
+            data:
+              brightness_step_pct: !input negative_brightness
+      - conditions:
+          - condition: trigger
+            id: started_rotating_left
+          - condition: state
+            entity_id: !input dimming_select
+            state: "3"
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input light_3
+            data:
+              brightness_step_pct: !input negative_brightness

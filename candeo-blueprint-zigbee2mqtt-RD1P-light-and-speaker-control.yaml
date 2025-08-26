@@ -1,0 +1,314 @@
+blueprint:
+  name: Candeo C-ZB-RD1P (REM or DPM mode) - Light or Speaker Control via Helper in zigbee2mqtt
+  description: >
+    **Dual control for C-ZB-RD1P (Remote Mode or Dual Purpose Mode) using zigbee2mqtt**
+
+    Use a Candeo RD1P to control either your smart lights or a media speaker from the same knob.
+
+    A helper chooses the active target so presses and rotation do the right thing for lights or audio.
+
+    Single press toggles the current target, double press switches targets, and rotation adjusts brightness or volume.
+
+    
+    **Features:**
+
+    - **Single press**: Toggles the active target  
+      - 💡 If target is **lights** it toggles the selected light, group, or area  
+      - 🔊 If target is **speaker** it plays or pauses the media player
+
+    - **Double press**: Cycles the helper between **lights** and **speaker**
+
+    - **Rotary control:**
+      - ➕ Right rotation increases **brightness** or **volume**
+      - ➖ Left rotation decreases **brightness** or **volume**
+
+    
+    ⚡ **Advanced features:**
+
+    - 🏠 Works with individual lights, groups, or areas
+
+    - 🎚️ Adjustable step sizes for brightness and volume
+
+    - 🔄 Smooth behavior with both **started_rotating** and **rotating** actions
+
+    - 🧠 Optional notifications to show the active target after switching
+
+    
+    **🛠️ Setup Required:**
+
+    Before using this blueprint, create this helper:
+
+    Settings → Devices & Services → Helpers
+
+    "Create Helper" → "Dropdown"
+
+    - Name: "RD1P Active Target"
+
+    - Options: lights, speaker
+
+    
+    **How It Works:**
+
+    - **Single Press**: Sends toggle to the target defined by the helper
+
+    - **Double Press**: Updates the helper to the next option and wraps around
+
+    - **Rotate Knob**: Adjusts brightness for lights or volume for speaker using your step sizes
+
+    
+    **Requirements:**
+
+    - C-ZB-RD1P device in Remote Mode or Dual Purpose Mode
+
+    - zigbee2mqtt with action events available
+
+    - Dimmable lights for brightness control and a media_player that supports volume_level
+
+    
+    **Version**: 1.0
+
+    **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
+
+  domain: automation
+  homeassistant:
+    min_version: 2024.6.0
+  input:
+    device_section:
+      name: Device & Targets
+      icon: mdi:devices
+      description: Select your RD1P device, target lights, speaker, and helper
+      input:
+        remote_device:
+          name: C-ZB-RD1P Remote Device
+          description: The C-ZB-RD1P device in remote mode or dual purpose mode.
+          selector:
+            device:
+              filter:
+                - model_id: C-ZB-RD1P-REM
+                - model_id: C-ZB-RD1P-DPM
+
+        target_lights:
+          name: Target Lights
+          description: Light, light group, or area to control when the helper is set to lights
+          selector:
+            target:
+              entity:
+                domain: light
+
+        speaker_entity:
+          name: Speaker (media_player)
+          description: Media player to control when the helper is set to speaker
+          selector:
+            entity:
+              filter:
+                - domain: media_player
+
+        selection_helper:
+          name: Active Target Helper
+          description: Input select that holds the current target (lights or speaker)
+          selector:
+            entity:
+              filter:
+                - domain: input_select
+
+    control_section:
+      name: Control Settings
+      icon: mdi:tune
+      description: Configure step sizes for brightness and volume
+      input:
+        brightness_step_pct:
+          name: Brightness Step Percentage
+          description: How much to change brightness per rotation step
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 50
+              unit_of_measurement: "%"
+
+        volume_step_pct:
+          name: Volume Step Percentage
+          description: How much to change volume per rotation step (0 to 100, maps to 0.0 to 1.0)
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 50
+              unit_of_measurement: "%"
+
+    advanced_section:
+      name: Advanced Options
+      icon: mdi:cog
+      description: Optional settings for enhanced feedback
+      collapsed: true
+      input:
+        show_notifications:
+          name: Show Target Notifications
+          description: Display a notification when switching between lights and speaker
+          default: true
+          selector:
+            boolean:
+
+mode: single
+max_exceeded: silent
+
+variables:
+  target_lights: !input target_lights
+  speaker: !input speaker_entity
+  selection_helper: !input selection_helper
+  brightness_step_pct: !input brightness_step_pct
+  volume_step_pct: !input volume_step_pct
+  show_notifications: !input show_notifications
+
+triggers:
+  # Press events
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: pressed
+    id: pressed
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: double_pressed
+    id: double_pressed
+
+  # Rotation events
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: started_rotating_right
+    id: rotate_right
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: rotating_right
+    id: rotate_right
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: started_rotating_left
+    id: rotate_left
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: rotating_left
+    id: rotate_left
+
+condition: []
+
+action:
+  - choose:
+
+      # Single press -> toggle depending on helper
+      - conditions:
+          - condition: trigger
+            id: pressed
+          - condition: state
+            entity_id: !input selection_helper
+            state: "lights"
+        sequence:
+          - action: light.toggle
+            target: "{{ target_lights }}"
+
+      - conditions:
+          - condition: trigger
+            id: pressed
+          - condition: state
+            entity_id: !input selection_helper
+            state: "speaker"
+        sequence:
+          - action: media_player.media_play_pause
+            target:
+              entity_id: !input speaker_entity
+
+      # Double press -> cycle helper (lights ↔ speaker)
+      - conditions:
+          - condition: trigger
+            id: double_pressed
+        sequence:
+          - action: input_select.select_next
+            target:
+              entity_id: !input selection_helper
+            data:
+              cycle: true
+          - if:
+              - condition: template
+                value_template: "{{ show_notifications }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "RD1P Active Target"
+                  message: >
+                    Target: {{ states(selection_helper) | title }}
+                  notification_id: "rd1p_target"
+
+      # Rotate right -> increase brightness or volume
+      - conditions:
+          - condition: trigger
+            id: rotate_right
+          - condition: state
+            entity_id: !input selection_helper
+            state: "lights"
+        sequence:
+          - action: light.turn_on
+            target: "{{ target_lights }}"
+            data:
+              brightness_step_pct: "{{ brightness_step_pct }}"
+
+      - conditions:
+          - condition: trigger
+            id: rotate_right
+          - condition: state
+            entity_id: !input selection_helper
+            state: "speaker"
+        sequence:
+          - action: media_player.volume_set
+            target:
+              entity_id: !input speaker_entity
+            data:
+              volume_level: >
+                {% set step = (volume_step_pct | int(5)) / 100 %}
+                {% set current = state_attr(speaker, 'volume_level') | float(0.5) %}
+                {% set new = current + step %}
+                {% if new > 1 %} 1 {% else %} {{ new }} {% endif %}
+
+      # Rotate left -> decrease brightness or volume
+      - conditions:
+          - condition: trigger
+            id: rotate_left
+          - condition: state
+            entity_id: !input selection_helper
+            state: "lights"
+        sequence:
+          - action: light.turn_on
+            target: "{{ target_lights }}"
+            data:
+              brightness_step_pct: "{{ -1 * (brightness_step_pct | int) }}"
+
+      - conditions:
+          - condition: trigger
+            id: rotate_left
+          - condition: state
+            entity_id: !input selection_helper
+            state: "speaker"
+        sequence:
+          - action: media_player.volume_set
+            target:
+              entity_id: !input speaker_entity
+            data:
+              volume_level: >
+                {% set step = (volume_step_pct | int(5)) / 100 %}
+                {% set current = state_attr(speaker, 'volume_level') | float(0.5) %}
+                {% set new = current - step %}
+                {% if new < 0 %} 0 {% else %} {{ new }} {% endif %}
