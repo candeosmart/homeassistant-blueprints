@@ -10,12 +10,13 @@ Devices
 
 ## RD1-Pro (C-ZB-RD1P) Decoupled Dimming Switch ##
 
-**4 Blueprints for the RD1-Pro (C-ZB-RD1P) Decoupled Dimming Switch**
+**5 Blueprints for the RD1-Pro (C-ZB-RD1P) Decoupled Dimming Switch**
 
 1. [Smart Bulb Control - brightness, white temperature, colour](#control-your-smart-lights-brightness-colour-and-white-temperature--all-from-a-single-switch)
-2. [Activate Scenes from your RD1-Pro](#activate-your-scenes-or-scripts-from-your-wall-switch)
-3. [Multi Light control with a single RD1-Pro](#control-3-lights-with-a-single-dimming-switch)
-4. [Lights, Music, action](#control-your-speakers-and-your-lights-with-1-wall-dimmer-switch)
+2. [Control the wired circuit and get button events for double press, hold and release](#control-the-wired-circuit-and-get-button-events-for-double-press-hold-and-release)
+3. [Activate Scenes from your RD1-Pro](#activate-your-scenes-or-scripts-from-your-wall-switch)
+4. [Multi Light control with a single RD1-Pro](#control-3-lights-with-a-single-dimming-switch)
+5. [Lights, Music, action](#control-your-speakers-and-your-lights-with-1-wall-dimmer-switch)
 
 
 ### Control your smart lights brightness, colour, and white temperature – all from a single switch. ###
@@ -29,6 +30,19 @@ Bring back natural wall control for your smart bulbs without cutting power. This
 **zigbee2mqtt**
 
 [![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-blueprint-zigbee2mqtt-RD1P-smart-bulb-colour-light-control.yaml)
+
+
+
+### Control the wired circuit and get button events for double press, hold and release ###
+
+Control your wired lights circuit, and get button events by putting the device in DPM mode and using the Remote (Endpoint2) to control the dimmable light on Endpoint1.
+
+**ZHA**
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-blueprint-zha-RD1P-smart-bulb-colour-light-control.yaml)
+
+
+**zigbee2mqtt**
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-blueprint-zha-RD1P-smart-bulb-colour-light-control.yaml)
 
 
 

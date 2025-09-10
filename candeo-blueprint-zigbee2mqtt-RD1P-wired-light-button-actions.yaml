@@ -1,0 +1,227 @@
+blueprint:
+  name: Candeo C-ZB-RD1P (DPM mode) - Wired Light + Button Actions in zigbee2mqtt
+  description: >
+    **Wired light control with extra actions for C-ZB-RD1P in Dual Purpose Mode using zigbee2mqtt**
+
+    Use a Candeo RD1P in DPM mode to control the wired light and still get remote actions for advanced automations.
+
+    Single press toggles the wired light, rotation adjusts brightness, and you can assign custom actions to double press, hold, and release.
+
+
+    **Features:**
+
+    - **Single press**: Toggles your wired light  
+    - **Double press**: Runs your custom action set  
+    - **Hold** and **Release**: Run separate custom actions  
+    - **Rotary control**:
+      - ➕ Right rotation brightens by an adjustable step
+      - ➖ Left rotation dims by an adjustable step
+
+
+    **🛠️ Setup Required:**
+
+    - Put your RD1P into **Dual Purpose Mode (DPM)**.
+    - In the selector below, pick the RD1P device with model **C-ZB-RD1P-DPM**.
+    - For the light, **choose the light entity from the same RD1P device** so it controls the wired load.
+
+
+    **How It Works:**
+
+    - **Single Press**: `light.toggle` on the wired light entity  
+    - **Rotate Knob**: Applies `brightness_step_pct` up or down  
+    - **Double Press / Hold / Release**: Executes the action sequences you define
+
+
+    **Requirements:**
+
+    - C-ZB-RD1P in Dual Purpose Mode
+    - zigbee2mqtt with action events available
+    - Wired light exposed as a Home Assistant `light` entity
+
+
+    **Version**: 1.0
+
+    **Compatible Devices**: Candeo C-ZB-RD1P-DPM
+
+  domain: automation
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    device_section:
+      name: Device & Wired Light
+      icon: mdi:devices
+      description: Select your RD1P device in DPM and the wired light entity from the same device
+      input:
+        remote_device:
+          name: C-ZB-RD1P Device (DPM)
+          description: Select the RD1P device that is in Dual Purpose Mode.
+          selector:
+            device:
+              filter:
+                - model_id: C-ZB-RD1P-DPM
+
+        wired_light:
+          name: Wired Light Entity
+          description: "Choose the light entity of the same RD1P device. This should be the wired load."
+          selector:
+            entity:
+              filter:
+                - domain: light
+
+    control_section:
+      name: Control Settings
+      icon: mdi:tune
+      description: Configure brightness step for the wired light
+      input:
+        brightness_step_pct:
+          name: Brightness Step Percentage
+          description: How much to change brightness per rotation step
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 50
+              unit_of_measurement: "%"
+
+    actions_section:
+      name: Extra Actions
+      icon: mdi:gesture-double-tap
+      description: Define what happens on double press, hold, and release
+      input:
+        on_double_press:
+          name: Double Press – Actions
+          description: Runs when the knob is double pressed
+          default: []
+          selector:
+            action: {}
+        on_hold:
+          name: Hold – Actions
+          description: Runs while the knob is held
+          default: []
+          selector:
+            action: {}
+        on_release:
+          name: Release – Actions
+          description: Runs when the knob is released
+          default: []
+          selector:
+            action: {}
+
+mode: single
+max_exceeded: silent
+
+# Variables (for readability)
+variables:
+  wired_light: !input wired_light
+  brightness_step_pct: !input brightness_step_pct
+
+triggers:
+  # Press events (from rd1p_knob_press)
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: pressed
+    id: pressed
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: double_pressed
+    id: double_pressed
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: held
+    id: held
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: released
+    id: released
+
+  # Rotation events (from rd1p_knob_rotation)
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: started_rotating_right
+    id: started_rotating_right
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: rotating_right
+    id: started_rotating_right
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: started_rotating_left
+    id: started_rotating_left
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: rotating_left
+    id: started_rotating_left
+
+condition: []
+
+action:
+  - choose:
+      # Single press -> toggle wired light
+      - conditions:
+          - condition: trigger
+            id: pressed
+        sequence:
+          - action: light.toggle
+            target:
+              entity_id: !input wired_light
+
+      # Double press -> run user actions
+      - conditions:
+          - condition: trigger
+            id: double_pressed
+        sequence: !input on_double_press
+
+      # Hold -> run user actions
+      - conditions:
+          - condition: trigger
+            id: held
+        sequence: !input on_hold
+
+      # Release -> run user actions
+      - conditions:
+          - condition: trigger
+            id: released
+        sequence: !input on_release
+
+      # Rotate right -> brighten wired light
+      - conditions:
+          - condition: trigger
+            id: started_rotating_right
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input wired_light
+            data:
+              brightness_step_pct: !input brightness_step_pct
+
+      # Rotate left -> dim wired light
+      - conditions:
+          - condition: trigger
+            id: started_rotating_left
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input wired_light
+            data:
+              brightness_step_pct: "{{ -1 * (brightness_step_pct | int) }}"
