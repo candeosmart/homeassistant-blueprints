@@ -4,7 +4,8 @@
 Devices
 
 1. [RD1-Pro](#rd1-pro-c-zb-rd1p-decoupled-dimming-switch)
-2. [Modmote Scene Switches](#modmote-scene-switch-blueprint)
+2. [Modmote Scene Switches (CMM-1)](#modmote-scene-switch-blueprint)
+3. [5 Button Scene Switch with Rotating Dial (C-ZB-SR5BR)](#5-button-scene-switch-with-rotating-dial)
 
 
 
@@ -103,6 +104,32 @@ A Blueprint to allow easy scene switch configuration for your Candeo Modmote, wi
 **zigbee2mqtt**
 
 [![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-modmote-blueprint-zigbee2mqtt.yaml)
+
+
+
+## 5-button Scene Switch with rotating dial ##
+
+Bring back effortless wall control for multiple lights from one remote. This blueprint lets the SR5BR pick an active light with buttons 1–4, toggle with the centre, and use the ring to brighten or dim smoothly. It solves the app-only hassle by making the wall control feel fast and reliable again.
+
+**ZHA**
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-blueprint-sr5br-ZHA-multi-light-control.yaml)
+
+**zigbee2mqtt**
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-blueprint-sr5br-z2m-multi-light-control.yaml)
+
+
+Restore natural wall control for a single smart bulb or group. This blueprint lets the SR5BR toggle power, rotate for brightness, and double-press to cycle dial modes—brightness, white temperature, or colour—while scene buttons are optional. It keeps tactile control on the wall so you don’t have to reach for an app.
+
+
+**ZHA**
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-blueprint-sr5br-ZHA-smart-bulb-control.yaml)
+
+**zigbee2mqtt**
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-blueprint-sr5br-z2m-smart-bulb-control.yaml)
 
 
 
