@@ -1,7 +1,7 @@
 
 # Home Assistant Blueprints for Candeo devices #
 
-Devices
+## Devices ##
 
 1. [RD1-Pro](#rd1-pro-c-zb-rd1p-decoupled-dimming-switch)
 2. [Modmote Scene Switches (CMM-1)](#modmote-scene-switch-blueprint)
