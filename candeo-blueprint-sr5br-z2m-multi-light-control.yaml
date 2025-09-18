@@ -1,0 +1,300 @@
+blueprint:
+  name: Candeo C-ZB-SR5BR – Multi-Light Dimming (Zigbee2MQTT)
+  description: >-
+    🎛️ **Candeo 5-Button Scene Switch with rotating dial – Model C-ZB-SR5BR**
+
+    Control up to **4 lights** from one SR5BR.  
+
+    - **Buttons 1–4** choose which light is “active”.  
+
+    - **Centre button** toggles the *active* light.  
+
+    - **Rotary dial** smoothly dims the *active* light (right = brighter, left = darker).
+
+
+    **✨ Features**
+
+    - 🔘 4 selector buttons (press) to choose Light 1–4
+
+    - ⭕ Centre button single-press toggles the selected light
+
+    - 🎚️ Dial rotation adjusts brightness of the selected light
+
+    - ⚙️ Custom brightness step (up/down)
+
+
+    **🛠 Setup Required**
+
+    1) Create an **`input_select`** helper with the *string* options **1, 2, 3, 4**  
+       *Settings → Devices & Services → Helpers → Dropdown*  
+       Suggested name: **`input_select.sr5br_selected_light`**
+
+    2) Pick that helper in this blueprint’s inputs.
+
+
+    **📦 Version:** 1.0  
+
+    **Manufacturer:** Candeo (C-ZB-SR5BR)
+
+  domain: automation
+
+  input:
+    sr5br_device:
+      name: Candeo SR5BR Remote
+      description: Select the SR5BR device discovered via Zigbee2MQTT.
+      selector:
+        device:
+          filter:
+            model_id: C-ZB-SR5BR
+
+    selected_light_helper:
+      name: Selected Light Helper (1–4)
+      description: Input select used to store which light is currently active (must have options 1,2,3,4).
+      selector:
+        entity:
+          domain:
+            - input_select
+
+    light_1:
+      name: Light 1
+      description: Light controlled when Button 1 is pressed / selected.
+      selector:
+        entity:
+          domain:
+            - light
+
+    light_2:
+      name: Light 2
+      description: Light controlled when Button 2 is pressed / selected.
+      selector:
+        entity:
+          domain:
+            - light
+
+    light_3:
+      name: Light 3
+      description: Light controlled when Button 3 is pressed / selected.
+      selector:
+        entity:
+          domain:
+            - light
+
+    light_4:
+      name: Light 4
+      description: Light controlled when Button 4 is pressed / selected.
+      selector:
+        entity:
+          domain:
+            - light
+
+    brightness_step_pct:
+      name: Brightness Step (Right/Brighter)
+      description: Percentage step applied when rotating right.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+
+    negative_brightness:
+      name: Brightness Step (Left/Darker)
+      description: Negative percentage step applied when rotating left.
+      default: -5
+      selector:
+        number:
+          min: -100
+          max: -1
+          unit_of_measurement: "%"
+
+mode: queued
+max: 20
+max_exceeded: silent
+
+# ---------- Variables (safe, no inline maps) ----------
+variables:
+  helper_entity: !input selected_light_helper
+  light_1_e: !input light_1
+  light_2_e: !input light_2
+  light_3_e: !input light_3
+  light_4_e: !input light_4
+
+  # Compute the currently selected index ("1"/"2"/"3"/"4") and the target light.
+  selected_index: >-
+    {{ states(helper_entity) | trim | default('1') }}
+  target_light: >-
+    {% set idx = states(helper_entity) | trim | default('1') %}
+    {% if idx == '1' %}{{ light_1_e }}
+    {% elif idx == '2' %}{{ light_2_e }}
+    {% elif idx == '3' %}{{ light_3_e }}
+    {% elif idx == '4' %}{{ light_4_e }}
+    {% else %}{{ light_1_e }}{% endif %}
+
+# ---------- Triggers ----------
+trigger:
+  # Selector buttons (set helper to 1..4)
+  - platform: device
+    device_id: !input sr5br_device
+    domain: mqtt
+    type: action
+    subtype: button_1_click
+    id: b1
+
+  - platform: device
+    device_id: !input sr5br_device
+    domain: mqtt
+    type: action
+    subtype: button_2_click
+    id: b2
+
+  - platform: device
+    device_id: !input sr5br_device
+    domain: mqtt
+    type: action
+    subtype: button_3_click
+    id: b3
+
+  - platform: device
+    device_id: !input sr5br_device
+    domain: mqtt
+    type: action
+    subtype: button_4_click
+    id: b4
+
+  # Centre button toggles selected light
+  - platform: device
+    device_id: !input sr5br_device
+    domain: mqtt
+    type: action
+    subtype: centre_button_click
+    id: center_toggle
+
+  # Dial rotation (right = brighter)
+  - platform: device
+    device_id: !input sr5br_device
+    domain: mqtt
+    type: action
+    subtype: started_rotating_right
+    id: right_start
+
+  - platform: device
+    device_id: !input sr5br_device
+    domain: mqtt
+    type: action
+    subtype: continued_rotating_right
+    id: right_cont
+
+  # Dial rotation (left = darker)
+  - platform: device
+    device_id: !input sr5br_device
+    domain: mqtt
+    type: action
+    subtype: started_rotating_left
+    id: left_start
+
+  - platform: device
+    device_id: !input sr5br_device
+    domain: mqtt
+    type: action
+    subtype: continued_rotating_left
+    id: left_cont
+
+# ---------- Actions ----------
+action:
+  # 1) Map buttons 1–4 to helper options "1"/"2"/"3"/"4"
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: b1
+        sequence:
+          - service: input_select.select_option
+            target:
+              entity_id: !input selected_light_helper
+            data:
+              option: "1"
+
+      - conditions:
+          - condition: trigger
+            id: b2
+        sequence:
+          - service: input_select.select_option
+            target:
+              entity_id: !input selected_light_helper
+            data:
+              option: "2"
+
+      - conditions:
+          - condition: trigger
+            id: b3
+        sequence:
+          - service: input_select.select_option
+            target:
+              entity_id: !input selected_light_helper
+            data:
+              option: "3"
+
+      - conditions:
+          - condition: trigger
+            id: b4
+        sequence:
+          - service: input_select.select_option
+            target:
+              entity_id: !input selected_light_helper
+            data:
+              option: "4"
+
+  # 2) Use centre button to toggle the *currently selected* light
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: center_toggle
+        sequence:
+          - service: light.toggle
+            data:
+              entity_id: "{{ target_light }}"
+
+  # 3) Dial rotation → brightness up/down on the *currently selected* light
+  - choose:
+      # Right turn = brighter
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: trigger
+                id: right_start
+              - condition: trigger
+                id: right_cont
+        sequence:
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ target_light is string and target_light|length > 0 and is_state(target_light, 'off') }}
+            then:
+              - service: light.turn_on
+                data:
+                  entity_id: "{{ target_light }}"
+          - service: light.turn_on
+            data:
+              entity_id: "{{ target_light }}"
+              brightness_step_pct: !input brightness_step_pct
+
+      # Left turn = darker
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: trigger
+                id: left_start
+              - condition: trigger
+                id: left_cont
+        sequence:
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ target_light is string and target_light|length > 0 and is_state(target_light, 'off') }}
+            then:
+              - service: light.turn_on
+                data:
+                  entity_id: "{{ target_light }}"
+          - service: light.turn_on
+            data:
+              entity_id: "{{ target_light }}"
+              brightness_step_pct: !input negative_brightness

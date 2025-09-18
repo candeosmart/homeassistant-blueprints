@@ -1,0 +1,456 @@
+blueprint:
+  name: Candeo C-ZB-SR5BR – Smart Bulb Control
+  description: >
+
+    🎛️ **Candeo 5-Button Scene Switch with rotating dial – Model C-ZB-SR5BR**
+
+
+    **✨ Features:**
+
+    - 🔘 **5 physical buttons** (each supports press, double press, hold, release)
+
+    - 🎚️ **Rotary dial** for smooth control (left/right rotation events)
+
+    - ⚡ **Advanced control modes** – brightness, colour temperature, or colour
+
+    - 🏠 Works with individual lights, groups, or areas
+
+    - 🔀 Flexible automation for lighting, media, or scenes
+
+
+    **🛠 Setup Required:**
+
+    - Create an `input_select` helper in Home Assistant  
+    - (Settings → Devices & Services → Helpers → Dropdown)  
+
+    - **Name:** `Candeo C-ZB-SR5BR Remote Dial Mode`  
+
+    - **Options:** brightness, white_temp, colour
+
+
+    **💡 How It Works:**
+
+    - **Buttons 1–4**: Assign to scenes or scripts
+
+    - **Centre button**: Toggle entity / cycle dial modes
+
+    - **Rotary dial**: Adjust brightness, white temperature, or colour depending on current mode
+
+
+    **📦 Version:** 1.0  
+    **Manufacturer:** Candeo (C-ZB-SR5BR)  
+    **Supported:** Home Assistant (ZHA), Zigbee2MQTT, Hubitat, SmartThings
+
+  domain: automation
+  input:
+    remote_device:
+      name: Candeo Scene Switch
+      description: The C-ZB-SR5BR scene switch device
+      selector:
+        device:
+          filter:
+            model_id: C-ZB-SR5BR
+
+    main_entity:
+      name: Main Controllable Smart Light Entity
+      description: Primary light, light group, or area to control with center button and dial
+      selector:
+        entity:
+          domain: [light, switch]
+
+    # --- Scenes are OPTIONAL now (leave blank if unused) ---
+    scene_1:
+      name: Scene 1 (Button 1)
+      description: Scene or script to activate with button 1 (top-left)
+      default: ""
+      selector:
+        entity:
+          domain: [scene, script]
+
+    scene_2:
+      name: Scene 2 (Button 2)
+      description: Scene or script to activate with button 2 (top-right)
+      default: ""
+      selector:
+        entity:
+          domain: [scene, script]
+
+    scene_3:
+      name: Scene 3 (Button 3)
+      description: Scene or script to activate with button 3 (bottom-left)
+      default: ""
+      selector:
+        entity:
+          domain: [scene, script]
+
+    scene_4:
+      name: Scene 4 (Button 4)
+      description: Scene or script to activate with button 4 (bottom-right)
+      default: ""
+      selector:
+        entity:
+          domain: [scene, script]
+
+    dial_mode_helper:
+      name: Dial Mode Helper
+      description: Input select helper to track current dial mode (brightness/white_temp/colour)
+      selector:
+        entity:
+          domain: input_select
+
+    brightness_step:
+      name: Brightness Step
+      description: How much to change brightness per dial step (1-50)
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          unit_of_measurement: "%"
+
+    white_temp_step:
+      name: White Temperature Step
+      description: How much to change white temperature per dial step (10-100)
+      default: 25
+      selector:
+        number:
+          min: 10
+          max: 100
+          unit_of_measurement: "mired"
+
+    colour_step:
+      name: Colour Step
+      description: How much to change hue per dial step in colour mode (5-60)
+      default: 15
+      selector:
+        number:
+          min: 5
+          max: 60
+          unit_of_measurement: "degrees"
+
+    show_mode_notifications:
+      name: Show Mode Change Notifications
+      default: true
+      selector:
+        boolean: {}
+
+mode: queued
+max: 20
+max_exceeded: silent
+
+variables:
+  main_entity: !input main_entity
+  brightness_step: !input brightness_step
+  white_temp_step: !input white_temp_step
+  colour_step: !input colour_step
+  show_mode_notifications: !input show_mode_notifications
+
+  # Optional scenes (empty string when not set)
+  scene_1_e: !input scene_1
+  scene_2_e: !input scene_2
+  scene_3_e: !input scene_3
+  scene_4_e: !input scene_4
+
+trigger:
+  # Scene Buttons (1-4)
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: button_1_click
+    id: scene_1
+
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: button_2_click
+    id: scene_2
+
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: button_3_click
+    id: scene_3
+
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: button_4_click
+    id: scene_4
+
+  # Center Button Actions
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: centre_button_click
+    id: center_toggle
+
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: centre_button_double_click
+    id: center_mode_cycle
+
+  # Dial Rotation
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: started_rotating_right
+    id: dial_right_start
+
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: continued_rotating_right
+    id: dial_right_continue
+
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: started_rotating_left
+    id: dial_left_start
+
+  - platform: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: continued_rotating_left
+    id: dial_left_continue
+
+action:
+  - choose:
+      # Scene Activations (only if a scene/script is configured)
+      - conditions:
+          - condition: trigger
+            id: scene_1
+          - condition: template
+            value_template: "{{ scene_1_e is string and scene_1_e|length > 0 }}"
+        sequence:
+          - service: homeassistant.turn_on
+            data:
+              entity_id: "{{ scene_1_e }}"
+
+      - conditions:
+          - condition: trigger
+            id: scene_2
+          - condition: template
+            value_template: "{{ scene_2_e is string and scene_2_e|length > 0 }}"
+        sequence:
+          - service: homeassistant.turn_on
+            data:
+              entity_id: "{{ scene_2_e }}"
+
+      - conditions:
+          - condition: trigger
+            id: scene_3
+          - condition: template
+            value_template: "{{ scene_3_e is string and scene_3_e|length > 0 }}"
+        sequence:
+          - service: homeassistant.turn_on
+            data:
+              entity_id: "{{ scene_3_e }}"
+
+      - conditions:
+          - condition: trigger
+            id: scene_4
+          - condition: template
+            value_template: "{{ scene_4_e is string and scene_4_e|length > 0 }}"
+        sequence:
+          - service: homeassistant.turn_on
+            data:
+              entity_id: "{{ scene_4_e }}"
+
+      # Center Button Toggle
+      - conditions:
+          - condition: trigger
+            id: center_toggle
+        sequence:
+          - service: light.toggle
+            target:
+              entity_id: !input main_entity
+
+      # Center Button Mode Cycle
+      - conditions:
+          - condition: trigger
+            id: center_mode_cycle
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "brightness"
+                sequence:
+                  - service: input_select.select_option
+                    target:
+                      entity_id: !input dial_mode_helper
+                    data:
+                      option: "white_temp"
+                  - condition: template
+                    value_template: "{{ show_mode_notifications }}"
+                  - service: persistent_notification.create
+                    data:
+                      title: "Remote Control"
+                      message: "Dial mode: White Temperature"
+                      notification_id: "remote_mode"
+
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "white_temp"
+                sequence:
+                  - service: input_select.select_option
+                    target:
+                      entity_id: !input dial_mode_helper
+                    data:
+                      option: "colour"
+                  - condition: template
+                    value_template: "{{ show_mode_notifications }}"
+                  - service: persistent_notification.create
+                    data:
+                      title: "Remote Control"
+                      message: "Dial mode: Colour"
+                      notification_id: "remote_mode"
+
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "colour"
+                sequence:
+                  - service: input_select.select_option
+                    target:
+                      entity_id: !input dial_mode_helper
+                    data:
+                      option: "brightness"
+                  - condition: template
+                    value_template: "{{ show_mode_notifications }}"
+                  - service: persistent_notification.create
+                    data:
+                      title: "Remote Control"
+                      message: "Dial mode: Brightness"
+                      notification_id: "remote_mode"
+
+      # Dial Right Rotation
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: trigger
+                id: dial_right_start
+              - condition: trigger
+                id: dial_right_continue
+        sequence:
+          - choose:
+              # Brightness Mode
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "brightness"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: !input main_entity
+                    data:
+                      brightness_step_pct: "{{ brightness_step }}"
+
+              # White Temperature Mode
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "white_temp"
+                  - condition: state
+                    entity_id: !input main_entity
+                    state: "on"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: !input main_entity
+                    data:
+                      color_temp: >
+                        {% set current = state_attr(main_entity, 'color_temp') | int(250) %}
+                        {% set new_temp = current + white_temp_step %}
+                        {% if new_temp > 500 %}500{% else %}{{ new_temp }}{% endif %}
+
+              # Colour Mode (Hue)
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "colour"
+                  - condition: state
+                    entity_id: !input main_entity
+                    state: "on"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: !input main_entity
+                    data:
+                      hs_color: >
+                        {% set current_hue = state_attr(main_entity, 'hs_color')[0] | int(0) if state_attr(main_entity, 'hs_color') else 0 %}
+                        {% set current_sat = state_attr(main_entity, 'hs_color')[1] | int(100) if state_attr(main_entity, 'hs_color') else 100 %}
+                        {% set new_hue = (current_hue + colour_step) % 360 %}
+                        [{{ new_hue }}, {{ current_sat }}]
+
+      # Dial Left Rotation
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: trigger
+                id: dial_left_start
+              - condition: trigger
+                id: dial_left_continue
+        sequence:
+          - choose:
+              # Brightness Mode
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "brightness"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: !input main_entity
+                    data:
+                      brightness_step_pct: "{{ -brightness_step }}"
+
+              # White Temperature Mode
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "white_temp"
+                  - condition: state
+                    entity_id: !input main_entity
+                    state: "on"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: !input main_entity
+                    data:
+                      color_temp: >
+                        {% set current = state_attr(main_entity, 'color_temp') | int(250) %}
+                        {% set new_temp = current - white_temp_step %}
+                        {% if new_temp < 153 %}153{% else %}{{ new_temp }}{% endif %}
+
+              # Colour Mode (Hue)
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "colour"
+                  - condition: state
+                    entity_id: !input main_entity
+                    state: "on"
+                sequence:
+                  - service: light.turn_on
+                    target:
+                      entity_id: !input main_entity
+                    data:
+                      hs_color: >
+                        {% set current_hue = state_attr(main_entity, 'hs_color')[0] | int(0) if state_attr(main_entity, 'hs_color') else 0 %}
+                        {% set current_sat = state_attr(main_entity, 'hs_color')[1] | int(100) if state_attr(main_entity, 'hs_color') else 100 %}
+                        {% set new_hue = (current_hue - colour_step) % 360 %}
+                        [{{ new_hue }}, {{ current_sat }}]

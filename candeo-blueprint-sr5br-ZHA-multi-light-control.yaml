@@ -1,0 +1,295 @@
+blueprint:
+  name: Candeo C-ZB-SR5BR – Multi-Light Dimming (ZHA)
+  description: >-
+    🎛️ **Candeo 5-Button Scene Switch with rotating dial — Model C-ZB-SR5BR (ZHA)**
+
+    Control up to **4 lights** from one SR5BR.
+
+
+    • **Buttons 1–4** choose which light is “active”.  
+
+    • **Centre** button toggles the active light.  
+
+    • **Rotary ring** dims the active light (right = brighter, left = darker).  
+
+
+    **ZHA events expected (per quirk / your samples):**  
+
+    - `command`: `press | double_press | hold | release` with `args.button` in
+      `button_1 | button_2 | button_3 | button_4 | button_centre`  
+
+    - `command`: `started_rotating | continued_rotating | stopped_rotating` with
+      `args.ring_direction`: `left | right`
+
+
+    **Setup**  
+
+      1) Create an **input_select** with options `1,2,3,4` (e.g. `input_select.sr5br_active_light`).  
+
+      2) Select your SR5BR device (ZHA) and the four light entities below.  
+
+      3) Adjust the brightness step sizes if desired.
+
+  domain: automation
+
+  input:
+    sr5br_device:
+      name: SR5BR (ZHA device)
+      description: Select the Candeo C-ZB-SR5BR paired via ZHA.
+      selector:
+        device:
+          filter:
+            - integration: zha
+              manufacturer: Candeo
+              model: C-ZB-SR5BR
+
+    selected_light_helper:
+      name: Selected Light Helper (1–4)
+      description: input_select helper with options exactly "1","2","3","4".
+      selector:
+        entity:
+          domain: input_select
+
+    light_1:
+      name: Light 1
+      selector:
+        entity:
+          domain: light
+
+    light_2:
+      name: Light 2
+      selector:
+        entity:
+          domain: light
+
+    light_3:
+      name: Light 3
+      selector:
+        entity:
+          domain: light
+
+    light_4:
+      name: Light 4
+      selector:
+        entity:
+          domain: light
+
+    step_up_pct:
+      name: Brightness step up (right/clockwise)
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          step: 1
+          unit_of_measurement: "%"
+
+    step_down_pct:
+      name: Brightness step down (left/counter-clockwise)
+      default: -10
+      selector:
+        number:
+          min: -50
+          max: -1
+          step: 1
+          unit_of_measurement: "%"
+
+mode: queued
+max: 20
+max_exceeded: silent
+
+# ─────────────────────────── Triggers (exact matches) ───────────────────────────
+trigger:
+  # Buttons 1..4 (press) select active index
+  - platform: event
+    event_type: zha_event
+    id: btn1
+    event_data:
+      device_id: !input sr5br_device
+      command: press
+      args:
+        button: button_1
+
+  - platform: event
+    event_type: zha_event
+    id: btn2
+    event_data:
+      device_id: !input sr5br_device
+      command: press
+      args:
+        button: button_2
+
+  - platform: event
+    event_type: zha_event
+    id: btn3
+    event_data:
+      device_id: !input sr5br_device
+      command: press
+      args:
+        button: button_3
+
+  - platform: event
+    event_type: zha_event
+    id: btn4
+    event_data:
+      device_id: !input sr5br_device
+      command: press
+      args:
+        button: button_4
+
+  # Centre press (matches your sample exactly)
+  - platform: event
+    event_type: zha_event
+    id: centre_press
+    event_data:
+      device_id: !input sr5br_device
+      command: press
+      args:
+        button: button_centre
+
+  # Ring – Right (started/continued)
+  - platform: event
+    event_type: zha_event
+    id: rot_right_start
+    event_data:
+      device_id: !input sr5br_device
+      command: started_rotating
+      args:
+        ring_direction: right
+
+  - platform: event
+    event_type: zha_event
+    id: rot_right_cont
+    event_data:
+      device_id: !input sr5br_device
+      command: continued_rotating
+      args:
+        ring_direction: right
+
+  # Ring – Left (started/continued)
+  - platform: event
+    event_type: zha_event
+    id: rot_left_start
+    event_data:
+      device_id: !input sr5br_device
+      command: started_rotating
+      args:
+        ring_direction: left
+
+  - platform: event
+    event_type: zha_event
+    id: rot_left_cont
+    event_data:
+      device_id: !input sr5br_device
+      command: continued_rotating
+      args:
+        ring_direction: left
+
+condition: []
+
+# ─────────────────────────────── Actions ───────────────────────────────────────
+action:
+  # Per-event variables (no !input inside templates)
+  - variables:
+      helper_entity: !input selected_light_helper
+      l1: !input light_1
+      l2: !input light_2
+      l3: !input light_3
+      l4: !input light_4
+
+  - choose:
+      # Button 1..4: select helper option
+      - conditions: "{{ trigger.id == 'btn1' }}"
+        sequence:
+          - service: input_select.select_option
+            target:
+              entity_id: !input selected_light_helper
+            data:
+              option: "1"
+
+      - conditions: "{{ trigger.id == 'btn2' }}"
+        sequence:
+          - service: input_select.select_option
+            target:
+              entity_id: !input selected_light_helper
+            data:
+              option: "2"
+
+      - conditions: "{{ trigger.id == 'btn3' }}"
+        sequence:
+          - service: input_select.select_option
+            target:
+              entity_id: !input selected_light_helper
+            data:
+              option: "3"
+
+      - conditions: "{{ trigger.id == 'btn4' }}"
+        sequence:
+          - service: input_select.select_option
+            target:
+              entity_id: !input selected_light_helper
+            data:
+              option: "4"
+
+      # Centre: toggle CURRENTLY selected light
+      - conditions: "{{ trigger.id == 'centre_press' }}"
+        sequence:
+          - variables:
+              resolved_target: >-
+                {% set sel = states(helper_entity) | default('1') %}
+                {% if sel == '1' %}{{ l1 }}
+                {% elif sel == '2' %}{{ l2 }}
+                {% elif sel == '3' %}{{ l3 }}
+                {% else %}{{ l4 }}{% endif %}
+          - service: homeassistant.toggle
+            target:
+              entity_id: "{{ resolved_target }}"
+
+      # Ring right (started/continued): brighten CURRENTLY selected light
+      - conditions: "{{ trigger.id in ['rot_right_start','rot_right_cont'] }}"
+        sequence:
+          - variables:
+              resolved_target: >-
+                {% set sel = states(helper_entity) | default('1') %}
+                {% if sel == '1' %}{{ l1 }}
+                {% elif sel == '2' %}{{ l2 }}
+                {% elif sel == '3' %}{{ l3 }}
+                {% else %}{{ l4 }}{% endif %}
+          - if:
+              - condition: template
+                value_template: "{{ is_state(resolved_target, 'off') }}"
+            then:
+              - service: light.turn_on
+                target:
+                  entity_id: "{{ resolved_target }}"
+          - service: light.turn_on
+            target:
+              entity_id: "{{ resolved_target }}"
+            data:
+              brightness_step_pct: !input step_up_pct
+
+      # Ring left (started/continued): dim CURRENTLY selected light
+      - conditions: "{{ trigger.id in ['rot_left_start','rot_left_cont'] }}"
+        sequence:
+          - variables:
+              resolved_target: >-
+                {% set sel = states(helper_entity) | default('1') %}
+                {% if sel == '1' %}{{ l1 }}
+                {% elif sel == '2' %}{{ l2 }}
+                {% elif sel == '3' %}{{ l3 }}
+                {% else %}{{ l4 }}{% endif %}
+          - if:
+              - condition: template
+                value_template: "{{ is_state(resolved_target, 'off') }}"
+            then:
+              - service: light.turn_on
+                target:
+                  entity_id: "{{ resolved_target }}"
+          - service: light.turn_on
+            target:
+              entity_id: "{{ resolved_target }}"
+            data:
+              brightness_step_pct: !input step_down_pct
+
+  - stop: "Handled zha_event for SR5BR"
+
