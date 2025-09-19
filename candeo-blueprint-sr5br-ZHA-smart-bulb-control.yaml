@@ -20,7 +20,7 @@ blueprint:
     **🛠 Setup Required:**
 
     - Create an `input_select` helper in Home Assistant
-      (Settings → Devices & Services → Helpers → Dropdown)
+      (Settings → Devices & actions → Helpers → Dropdown)
       **Options:** `brightness`, `white_temp`, `colour`
 
 
@@ -61,7 +61,6 @@ blueprint:
         entity:
           domain:
             - light
-            - switch
 
     # Scenes are OPTIONAL: leave blank if unused (default "")
     scene_1:
@@ -149,80 +148,64 @@ max_exceeded: silent
 
 # ─────────────────────────── Triggers (ZHA events) ───────────────────────────
 trigger:
-  # Scene buttons 1..4 (press)
+  # Scene buttons 1..4 (single press) – quirk uses button_X_click
   - platform: event
     event_type: zha_event
     id: scene_1
     event_data:
       device_id: !input remote_device
-      command: press
-      args:
-        button: button_1
+      command: button_1_click
 
   - platform: event
     event_type: zha_event
     id: scene_2
     event_data:
       device_id: !input remote_device
-      command: press
-      args:
-        button: button_2
+      command: button_2_click
 
   - platform: event
     event_type: zha_event
     id: scene_3
     event_data:
       device_id: !input remote_device
-      command: press
-      args:
-        button: button_3
+      command: button_3_click
 
   - platform: event
     event_type: zha_event
     id: scene_4
     event_data:
       device_id: !input remote_device
-      command: press
-      args:
-        button: button_4
+      command: button_4_click
 
-  # Centre button
+  # Centre button (press toggles, double_press cycles mode) – quirk names
   - platform: event
     event_type: zha_event
     id: center_toggle
     event_data:
       device_id: !input remote_device
-      command: press
-      args:
-        button: button_centre
+      command: centre_button_click
 
   - platform: event
     event_type: zha_event
     id: center_mode_cycle
     event_data:
       device_id: !input remote_device
-      command: double_press
-      args:
-        button: button_centre
+      command: centre_button_double_click
 
-  # Dial rotation: right (start/continue)
+  # Dial rotation: right (start/continue) – quirk names embed direction
   - platform: event
     event_type: zha_event
     id: dial_right_start
     event_data:
       device_id: !input remote_device
-      command: started_rotating
-      args:
-        ring_direction: right
+      command: started_rotating_right
 
   - platform: event
     event_type: zha_event
     id: dial_right_continue
     event_data:
       device_id: !input remote_device
-      command: continued_rotating
-      args:
-        ring_direction: right
+      command: continued_rotating_right
 
   # Dial rotation: left (start/continue)
   - platform: event
@@ -230,18 +213,14 @@ trigger:
     id: dial_left_start
     event_data:
       device_id: !input remote_device
-      command: started_rotating
-      args:
-        ring_direction: left
+      command: started_rotating_left
 
   - platform: event
     event_type: zha_event
     id: dial_left_continue
     event_data:
       device_id: !input remote_device
-      command: continued_rotating
-      args:
-        ring_direction: left
+      command: continued_rotating_left
 
 condition: []
 
@@ -270,7 +249,7 @@ action:
           - condition: template
             value_template: "{{ scene_1_e is string and scene_1_e|length > 0 }}"
         sequence:
-          - service: homeassistant.turn_on
+          - action: homeassistant.turn_on
             data:
               entity_id: "{{ scene_1_e }}"
 
@@ -280,7 +259,7 @@ action:
           - condition: template
             value_template: "{{ scene_2_e is string and scene_2_e|length > 0 }}"
         sequence:
-          - service: homeassistant.turn_on
+          - action: homeassistant.turn_on
             data:
               entity_id: "{{ scene_2_e }}"
 
@@ -290,7 +269,7 @@ action:
           - condition: template
             value_template: "{{ scene_3_e is string and scene_3_e|length > 0 }}"
         sequence:
-          - service: homeassistant.turn_on
+          - action: homeassistant.turn_on
             data:
               entity_id: "{{ scene_3_e }}"
 
@@ -300,19 +279,23 @@ action:
           - condition: template
             value_template: "{{ scene_4_e is string and scene_4_e|length > 0 }}"
         sequence:
-          - service: homeassistant.turn_on
+          - action: homeassistant.turn_on
             data:
               entity_id: "{{ scene_4_e }}"
 
       # Centre press = toggle main entity (works for light or switch)
-      - conditions: "{{ trigger.id == 'center_toggle' }}"
+      - conditions:
+          - condition: trigger
+            id: center_toggle
         sequence:
-          - service: homeassistant.toggle
+          - action: homeassistant.toggle
             target:
               entity_id: !input main_entity
 
       # Centre double-press = cycle dial mode (brightness -> white_temp -> colour)
-      - conditions: "{{ trigger.id == 'center_mode_cycle' }}"
+      - conditions:
+          - condition: trigger
+            id: center_mode_cycle
         sequence:
           - choose:
               - conditions:
@@ -320,57 +303,65 @@ action:
                     entity_id: !input dial_mode_helper
                     state: "brightness"
                 sequence:
-                  - service: input_select.select_option
+                  - action: input_select.select_option
                     target:
                       entity_id: !input dial_mode_helper
                     data:
                       option: "white_temp"
-                  - condition: template
-                    value_template: "{{ notify_modes }}"
-                  - service: persistent_notification.create
-                    data:
-                      title: "Remote Control"
-                      message: "Dial mode: White Temperature"
-                      notification_id: "sr5br_mode"
+                  - if:
+                      - condition: template
+                        value_template: "{{ notify_modes }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "Remote Control"
+                          message: "Dial mode: White Temperature"
+                          notification_id: "sr5br_mode"
 
               - conditions:
                   - condition: state
                     entity_id: !input dial_mode_helper
                     state: "white_temp"
                 sequence:
-                  - service: input_select.select_option
+                  - action: input_select.select_option
                     target:
                       entity_id: !input dial_mode_helper
                     data:
                       option: "colour"
-                  - condition: template
-                    value_template: "{{ notify_modes }}"
-                  - service: persistent_notification.create
-                    data:
-                      title: "Remote Control"
-                      message: "Dial mode: Colour"
-                      notification_id: "sr5br_mode"
+                  - if:
+                      - condition: template
+                        value_template: "{{ notify_modes }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "Remote Control"
+                          message: "Dial mode: Colour"
+                          notification_id: "sr5br_mode"
 
               - conditions:
                   - condition: state
                     entity_id: !input dial_mode_helper
                     state: "colour"
                 sequence:
-                  - service: input_select.select_option
+                  - action: input_select.select_option
                     target:
                       entity_id: !input dial_mode_helper
                     data:
                       option: "brightness"
-                  - condition: template
-                    value_template: "{{ notify_modes }}"
-                  - service: persistent_notification.create
-                    data:
-                      title: "Remote Control"
-                      message: "Dial mode: Brightness"
-                      notification_id: "sr5br_mode"
+                  - if:
+                      - condition: template
+                        value_template: "{{ notify_modes }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "Remote Control"
+                          message: "Dial mode: Brightness"
+                          notification_id: "sr5br_mode"
 
       # Dial → RIGHT (start/continue)
-      - conditions: "{{ trigger.id in ['dial_right_start','dial_right_continue'] }}"
+      - conditions:
+          - condition: trigger
+            id: dial_right_start
         sequence:
           - choose:
               # Brightness mode (turn on if off, then step up)
@@ -378,60 +369,121 @@ action:
                   - condition: state
                     entity_id: !input dial_mode_helper
                     state: "brightness"
-                  - condition: template
-                    value_template: "{{ (main_e|string).split('.')[0] == 'light' }}"
                 sequence:
-                  - if:
-                      - condition: template
-                        value_template: "{{ states(main_e) == 'off' }}"
-                    then:
-                      - service: light.turn_on
-                        target:
-                          entity_id: !input main_entity
-                  - service: light.turn_on
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'off' }}"
+                        sequence:
+                          - action: light.turn_on
+                            target:
+                              entity_id: !input main_entity
+                  - action: light.turn_on
                     target:
                       entity_id: !input main_entity
                     data:
                       brightness_step_pct: "{{ step_b }}"
 
-              # White temp mode (mired clamp 153–500)
+              # White temp mode (mired clamp 153–500) – RIGHT makes cooler (lower mired)
               - conditions:
                   - condition: state
                     entity_id: !input dial_mode_helper
                     state: "white_temp"
-                  - condition: template
-                    value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
                 sequence:
-                  - service: light.turn_on
-                    target:
-                      entity_id: !input main_entity
-                    data:
-                      color_temp: >
-                        {% set current = state_attr(main_e, 'color_temp') | int(250) %}
-                        {% set new_temp = current + (step_ct | int) %}
-                        {% if new_temp > 500 %}500{% else %}{{ new_temp }}{% endif %}
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
+                        sequence:
+                          - action: light.turn_on
+                            target:
+                              entity_id: !input main_entity
+                            data:
+                              color_temp: >
+                                {% set current = state_attr(main_e, 'color_temp') | int(250) %}
+                                {% set new_temp = current - (step_ct | int) %}
+                                {% if new_temp < 153 %}153{% else %}{{ new_temp }}{% endif %}
 
               # Colour mode (hue rotate forward)
               - conditions:
                   - condition: state
                     entity_id: !input dial_mode_helper
                     state: "colour"
-                  - condition: template
-                    value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
                 sequence:
-                  - service: light.turn_on
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
+                        sequence:
+                          - action: light.turn_on
+                            target:
+                              entity_id: !input main_entity
+                            data:
+                              hs_color: >
+                                {% set hs = state_attr(main_e, 'hs_color') %}
+                                {% set h = (hs[0] | float(0)) if hs else 0 %}
+                                {% set s = (hs[1] | float(100)) if hs else 100 %}
+                                {% set nh = (h + (step_h | float)) % 360 %}
+                                [{{ nh }}, {{ s }}]
+
+      - conditions:
+          - condition: trigger
+            id: dial_right_continue
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "brightness"
+                sequence:
+                  - action: light.turn_on
                     target:
                       entity_id: !input main_entity
                     data:
-                      hs_color: >
-                        {% set hs = state_attr(main_e, 'hs_color') %}
-                        {% set h = (hs[0] | float(0)) if hs else 0 %}
-                        {% set s = (hs[1] | float(100)) if hs else 100 %}
-                        {% set nh = (h + (step_h | float)) % 360 %}
-                        [{{ nh }}, {{ s }}]
+                      brightness_step_pct: "{{ step_b }}"
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "white_temp"
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
+                        sequence:
+                          - action: light.turn_on
+                            target:
+                              entity_id: !input main_entity
+                            data:
+                              color_temp: >
+                                {% set current = state_attr(main_e, 'color_temp') | int(250) %}
+                                {% set new_temp = current - (step_ct | int) %}
+                                {% if new_temp < 153 %}153{% else %}{{ new_temp }}{% endif %}
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "colour"
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
+                        sequence:
+                          - action: light.turn_on
+                            target:
+                              entity_id: !input main_entity
+                            data:
+                              hs_color: >
+                                {% set hs = state_attr(main_e, 'hs_color') %}
+                                {% set h = (hs[0] | float(0)) if hs else 0 %}
+                                {% set s = (hs[1] | float(100)) if hs else 100 %}
+                                {% set nh = (h + (step_h | float)) % 360 %}
+                                [{{ nh }}, {{ s }}]
 
       # Dial → LEFT (start/continue)
-      - conditions: "{{ trigger.id in ['dial_left_start','dial_left_continue'] }}"
+      - conditions:
+          - condition: trigger
+            id: dial_left_start
         sequence:
           - choose:
               # Brightness mode (turn on if off, then step down)
@@ -439,54 +491,113 @@ action:
                   - condition: state
                     entity_id: !input dial_mode_helper
                     state: "brightness"
-                  - condition: template
-                    value_template: "{{ (main_e|string).split('.')[0] == 'light' }}"
                 sequence:
-                  - if:
-                      - condition: template
-                        value_template: "{{ states(main_e) == 'off' }}"
-                    then:
-                      - service: light.turn_on
-                        target:
-                          entity_id: !input main_entity
-                  - service: light.turn_on
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'off' }}"
+                        sequence:
+                          - action: light.turn_on
+                            target:
+                              entity_id: !input main_entity
+                  - action: light.turn_on
                     target:
                       entity_id: !input main_entity
                     data:
-                      brightness_step_pct: "{{ (0 - (step_b | int)) }}"
+                      brightness_step_pct: "{{ 0 - (step_b | int) }}"
 
-              # White temp mode (mired clamp 153–500)
+              # White temp mode (mired clamp 153–500) – LEFT makes warmer (higher mired)
               - conditions:
                   - condition: state
                     entity_id: !input dial_mode_helper
                     state: "white_temp"
-                  - condition: template
-                    value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
                 sequence:
-                  - service: light.turn_on
-                    target:
-                      entity_id: !input main_entity
-                    data:
-                      color_temp: >
-                        {% set current = state_attr(main_e, 'color_temp') | int(250) %}
-                        {% set new_temp = current - (step_ct | int) %}
-                        {% if new_temp < 153 %}153{% else %}{{ new_temp }}{% endif %}
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
+                        sequence:
+                          - action: light.turn_on
+                            target:
+                              entity_id: !input main_entity
+                            data:
+                              color_temp: >
+                                {% set current = state_attr(main_e, 'color_temp') | int(250) %}
+                                {% set new_temp = current + (step_ct | int) %}
+                                {% if new_temp > 500 %}500{% else %}{{ new_temp }}{% endif %}
 
               # Colour mode (hue rotate backward)
               - conditions:
                   - condition: state
                     entity_id: !input dial_mode_helper
                     state: "colour"
-                  - condition: template
-                    value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
                 sequence:
-                  - service: light.turn_on
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
+                        sequence:
+                          - action: light.turn_on
+                            target:
+                              entity_id: !input main_entity
+                            data:
+                              hs_color: >
+                                {% set hs = state_attr(main_e, 'hs_color') %}
+                                {% set h = (hs[0] | float(0)) if hs else 0 %}
+                                {% set s = (hs[1] | float(100)) if hs else 100 %}
+                                {% set nh = (h - (step_h | float)) % 360 %}
+                                [{{ nh }}, {{ s }}]
+
+      - conditions:
+          - condition: trigger
+            id: dial_left_continue
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "brightness"
+                sequence:
+                  - action: light.turn_on
                     target:
                       entity_id: !input main_entity
                     data:
-                      hs_color: >
-                        {% set hs = state_attr(main_e, 'hs_color') %}
-                        {% set h = (hs[0] | float(0)) if hs else 0 %}
-                        {% set s = (hs[1] | float(100)) if hs else 100 %}
-                        {% set nh = (h - (step_h | float)) % 360 %}
-                        [{{ nh }}, {{ s }}]
+                      brightness_step_pct: "{{ 0 - (step_b | int) }}"
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "white_temp"
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
+                        sequence:
+                          - action: light.turn_on
+                            target:
+                              entity_id: !input main_entity
+                            data:
+                              color_temp: >
+                                {% set current = state_attr(main_e, 'color_temp') | int(250) %}
+                                {% set new_temp = current + (step_ct | int) %}
+                                {% if new_temp > 500 %}500{% else %}{{ new_temp }}{% endif %}
+              - conditions:
+                  - condition: state
+                    entity_id: !input dial_mode_helper
+                    state: "colour"
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ (main_e|string).split('.')[0] == 'light' and states(main_e) == 'on' }}"
+                        sequence:
+                          - action: light.turn_on
+                            target:
+                              entity_id: !input main_entity
+                            data:
+                              hs_color: >
+                                {% set hs = state_attr(main_e, 'hs_color') %}
+                                {% set h = (hs[0] | float(0)) if hs else 0 %}
+                                {% set s = (hs[1] | float(100)) if hs else 100 %}
+                                {% set nh = (h - (step_h | float)) % 360 %}
+                                [{{ nh }}, {{ s }}]

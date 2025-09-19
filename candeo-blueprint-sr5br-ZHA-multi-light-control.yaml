@@ -5,29 +5,17 @@ blueprint:
 
     Control up to **4 lights** from one SR5BR.
 
-
     • **Buttons 1–4** choose which light is “active”.  
-
     • **Centre** button toggles the active light.  
-
     • **Rotary ring** dims the active light (right = brighter, left = darker).  
 
-
-    **ZHA events expected (per quirk / your samples):**  
-
-    - `command`: `press | double_press | hold | release` with `args.button` in
-      `button_1 | button_2 | button_3 | button_4 | button_centre`  
-
-    - `command`: `started_rotating | continued_rotating | stopped_rotating` with
-      `args.ring_direction`: `left | right`
-
+    **ZHA events expected (custom quirk):**  
+    - `command`: `button_1_click | button_2_click | button_3_click | button_4_click | centre_button_click | centre_button_double_click`  
+    - `command`: `started_rotating_right | continued_rotating_right | started_rotating_left | continued_rotating_left`
 
     **Setup**  
-
       1) Create an **input_select** with options `1,2,3,4` (e.g. `input_select.sr5br_active_light`).  
-
       2) Select your SR5BR device (ZHA) and the four light entities below.  
-
       3) Adjust the brightness step sizes if desired.
 
   domain: automation
@@ -98,7 +86,7 @@ mode: queued
 max: 20
 max_exceeded: silent
 
-# ─────────────────────────── Triggers (exact matches) ───────────────────────────
+# ─────────────────────────── Triggers (new quirk commands) ───────────────────────────
 trigger:
   # Buttons 1..4 (press) select active index
   - platform: event
@@ -106,88 +94,70 @@ trigger:
     id: btn1
     event_data:
       device_id: !input sr5br_device
-      command: press
-      args:
-        button: button_1
+      command: button_1_click
 
   - platform: event
     event_type: zha_event
     id: btn2
     event_data:
       device_id: !input sr5br_device
-      command: press
-      args:
-        button: button_2
+      command: button_2_click
 
   - platform: event
     event_type: zha_event
     id: btn3
     event_data:
       device_id: !input sr5br_device
-      command: press
-      args:
-        button: button_3
+      command: button_3_click
 
   - platform: event
     event_type: zha_event
     id: btn4
     event_data:
       device_id: !input sr5br_device
-      command: press
-      args:
-        button: button_4
+      command: button_4_click
 
-  # Centre press (matches your sample exactly)
+  # Centre press (toggle) and double-press (no change needed here functionally)
   - platform: event
     event_type: zha_event
     id: centre_press
     event_data:
       device_id: !input sr5br_device
-      command: press
-      args:
-        button: button_centre
+      command: centre_button_click
 
-  # Ring – Right (started/continued)
+  # Rotary — Right (start/continue)
   - platform: event
     event_type: zha_event
     id: rot_right_start
     event_data:
       device_id: !input sr5br_device
-      command: started_rotating
-      args:
-        ring_direction: right
+      command: started_rotating_right
 
   - platform: event
     event_type: zha_event
     id: rot_right_cont
     event_data:
       device_id: !input sr5br_device
-      command: continued_rotating
-      args:
-        ring_direction: right
+      command: continued_rotating_right
 
-  # Ring – Left (started/continued)
+  # Rotary — Left (start/continue)
   - platform: event
     event_type: zha_event
     id: rot_left_start
     event_data:
       device_id: !input sr5br_device
-      command: started_rotating
-      args:
-        ring_direction: left
+      command: started_rotating_left
 
   - platform: event
     event_type: zha_event
     id: rot_left_cont
     event_data:
       device_id: !input sr5br_device
-      command: continued_rotating
-      args:
-        ring_direction: left
+      command: continued_rotating_left
 
 condition: []
 
-# ─────────────────────────────── Actions ───────────────────────────────────────
+# ─────────────────────────────── Actions (unchanged logic) ───────────────────────────────────────
 action:
   # Per-event variables (no !input inside templates)
   - variables:
@@ -201,7 +171,7 @@ action:
       # Button 1..4: select helper option
       - conditions: "{{ trigger.id == 'btn1' }}"
         sequence:
-          - service: input_select.select_option
+          - action: input_select.select_option
             target:
               entity_id: !input selected_light_helper
             data:
@@ -209,7 +179,7 @@ action:
 
       - conditions: "{{ trigger.id == 'btn2' }}"
         sequence:
-          - service: input_select.select_option
+          - action: input_select.select_option
             target:
               entity_id: !input selected_light_helper
             data:
@@ -217,7 +187,7 @@ action:
 
       - conditions: "{{ trigger.id == 'btn3' }}"
         sequence:
-          - service: input_select.select_option
+          - action: input_select.select_option
             target:
               entity_id: !input selected_light_helper
             data:
@@ -225,7 +195,7 @@ action:
 
       - conditions: "{{ trigger.id == 'btn4' }}"
         sequence:
-          - service: input_select.select_option
+          - action: input_select.select_option
             target:
               entity_id: !input selected_light_helper
             data:
@@ -241,7 +211,7 @@ action:
                 {% elif sel == '2' %}{{ l2 }}
                 {% elif sel == '3' %}{{ l3 }}
                 {% else %}{{ l4 }}{% endif %}
-          - service: homeassistant.toggle
+          - action: homeassistant.toggle
             target:
               entity_id: "{{ resolved_target }}"
 
@@ -259,10 +229,10 @@ action:
               - condition: template
                 value_template: "{{ is_state(resolved_target, 'off') }}"
             then:
-              - service: light.turn_on
+              - action: light.turn_on
                 target:
                   entity_id: "{{ resolved_target }}"
-          - service: light.turn_on
+          - action: light.turn_on
             target:
               entity_id: "{{ resolved_target }}"
             data:
@@ -282,14 +252,13 @@ action:
               - condition: template
                 value_template: "{{ is_state(resolved_target, 'off') }}"
             then:
-              - service: light.turn_on
+              - action: light.turn_on
                 target:
                   entity_id: "{{ resolved_target }}"
-          - service: light.turn_on
+          - action: light.turn_on
             target:
               entity_id: "{{ resolved_target }}"
             data:
               brightness_step_pct: !input step_down_pct
 
   - stop: "Handled zha_event for SR5BR"
-
