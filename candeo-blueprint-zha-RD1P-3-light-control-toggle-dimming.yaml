@@ -151,46 +151,47 @@ triggers:
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Pressed"
-    subtype: "Rotary knob"
+    type: "remote_button_short_press"
+    subtype: "rotary_knob"
     id: pressed
 
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Double pressed"
-    subtype: "Rotary knob"
+    type: "remote_button_double_press"
+    subtype: "rotary_knob"
     id: double_pressed
 
   # Rotation events (right)
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Started rotating right"
-    subtype: "Rotary knob"
+    type: "rotary_knob_started_rotating"
+    subtype: "right"
     id: started_rotating_right
 
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Rotating right"
-    subtype: "Rotary knob"
+    type: "rotary_knob_continued_rotating"
+    subtype: "right"
     id: started_rotating_right
 
   # Rotation events (left)
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Started rotating left"
-    subtype: "Rotary knob"
+    type: "rotary_knob_started_rotating"
+    subtype: "left"
     id: started_rotating_left
 
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Rotating left"
-    subtype: "Rotary knob"
+    type: "rotary_knob_continued_rotating"
+    subtype: "left"
     id: started_rotating_left
+
 
 condition: []
 

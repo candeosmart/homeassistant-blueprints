@@ -122,59 +122,60 @@ triggers:
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Pressed"
-    subtype: "Rotary knob"
+    type: "remote_button_short_press"
+    subtype: "rotary_knob"
     id: pressed
 
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Double pressed"
-    subtype: "Rotary knob"
+    type: "remote_button_double_press"
+    subtype: "rotary_knob"
     id: double_pressed
 
   # Hold and release events
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Held"
-    subtype: "Rotary knob"
+    type: "remote_button_long_press"
+    subtype: "rotary_knob"
     id: held
 
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Released"
-    subtype: "Rotary knob"
+    type: "remote_button_long_release"
+    subtype: "rotary_knob"
     id: released
 
   # Rotation right (treat started and rotating the same)
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Started rotating right"
-    subtype: "Rotary knob"
+    type: "rotary_knob_started_rotating"
+    subtype: "right"
     id: rotate_right
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Rotating right"
-    subtype: "Rotary knob"
+    type: "rotary_knob_continued_rotating"
+    subtype: "right"
     id: rotate_right
 
   # Rotation left (treat started and rotating the same)
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Started rotating left"
-    subtype: "Rotary knob"
+    type: "rotary_knob_started_rotating"
+    subtype: "left"
     id: rotate_left
   - trigger: device
     device_id: !input remote_device
     domain: zha
-    type: "Rotating left"
-    subtype: "Rotary knob"
+    type: "rotary_knob_continued_rotating"
+    subtype: "left"
     id: rotate_left
+
 
 condition: []
 
