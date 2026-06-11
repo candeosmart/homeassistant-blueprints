@@ -57,7 +57,7 @@ blueprint:
     - Input select helper for mode tracking
 
 
-    **Version**: 1.0
+    **Version**: 2026.6
 
     **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
 
@@ -117,13 +117,13 @@ blueprint:
 
         color_temp_step:
           name: Color Temperature Step
-          description: How much to change color temperature per rotation step (10-100 mired)
-          default: 25
+          description: How much to change color temperature per rotation step (50-500 Kelvin)
+          default: 250
           selector:
             number:
-              min: 10
-              max: 100
-              unit_of_measurement: "mired"
+              min: 50
+              max: 500
+              unit_of_measurement: "K"
 
         hue_step:
           name: Hue Step
@@ -321,7 +321,7 @@ action:
                   - action: light.turn_on
                     target: "{{ target_lights }}"
                     data:
-                      color_temp: >
+                      color_temp_kelvin: >
                         {% if target_lights.entity_id is defined %}
                           {% set entity = target_lights.entity_id %}
                         {% elif target_lights.area_id is defined %}
@@ -330,11 +330,13 @@ action:
                           {% set entity = expand(target_lights.entity_id) | map(attribute='entity_id') | list | first %}
                         {% endif %}
                         {% if entity %}
-                          {% set current = state_attr(entity, 'color_temp') | int(250) %}
+                          {% set current = state_attr(entity, 'color_temp_kelvin') | int(4000) %}
+                          {% set min_kelvin = state_attr(entity, 'min_color_temp_kelvin') | int(2000) %}
+                          {% set max_kelvin = state_attr(entity, 'max_color_temp_kelvin') | int(6500) %}
                           {% set new_temp = current + color_temp_step %}
-                          {% if new_temp > 500 %}500{% else %}{{ new_temp }}{% endif %}
+                          {% if new_temp > max_kelvin %}{{ max_kelvin }}{% else %}{{ new_temp }}{% endif %}
                         {% else %}
-                          250
+                          4000
                         {% endif %}
 
               # Colour Mode (Hue)
@@ -390,7 +392,7 @@ action:
                   - action: light.turn_on
                     target: "{{ target_lights }}"
                     data:
-                      color_temp: >
+                      color_temp_kelvin: >
                         {% if target_lights.entity_id is defined %}
                           {% set entity = target_lights.entity_id %}
                         {% elif target_lights.area_id is defined %}
@@ -399,11 +401,13 @@ action:
                           {% set entity = expand(target_lights.entity_id) | map(attribute='entity_id') | list | first %}
                         {% endif %}
                         {% if entity %}
-                          {% set current = state_attr(entity, 'color_temp') | int(250) %}
+                          {% set current = state_attr(entity, 'color_temp_kelvin') | int(4000) %}
+                          {% set min_kelvin = state_attr(entity, 'min_color_temp_kelvin') | int(2000) %}
+                          {% set max_kelvin = state_attr(entity, 'max_color_temp_kelvin') | int(6500) %}
                           {% set new_temp = current - color_temp_step %}
-                          {% if new_temp < 153 %}153{% else %}{{ new_temp }}{% endif %}
+                          {% if new_temp < min_kelvin %}{{ min_kelvin }}{% else %}{{ new_temp }}{% endif %}
                         {% else %}
-                          250
+                          4000
                         {% endif %}
 
               # Colour Mode (Hue)

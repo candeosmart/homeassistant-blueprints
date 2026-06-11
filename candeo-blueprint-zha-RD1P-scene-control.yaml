@@ -4,14 +4,14 @@ blueprint:
     **Scene and script control for C-ZB-RD1P (Remote Mode or Dual Purpose Mode) using ZHA**
 
     Use a Candeo RD1P in REM mode or DPM mode to toggle lights, cycle your favorite scenes or scripts with a double press, and trigger a dedicated scene or script with a long press.
-    
+
     Rotation provides quick dimming of the target lights with adjustable step size and optional transition.
 
 
     **Features:**
 
     - **Single press**: Toggles the target lights or group
-    
+
     - **Double press**: Activates the current scene/script from your helper selection, then moves to the next (1 → 2 → … → N → 1)
 
     - **Long press**: Runs a dedicated scene or script
@@ -55,7 +55,7 @@ blueprint:
     - Dimmable target lights for rotary dimming
 
 
-    **Version**: 1.0
+    **Version**: 2026.6
 
     **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
   domain: automation
@@ -199,6 +199,9 @@ blueprint:
 
 mode: single
 
+variables:
+  long_press_action_target: !input long_press_action
+
 triggers:
   # Press events
   - trigger: device
@@ -250,7 +253,6 @@ triggers:
     type: "rotary_knob_continued_rotating"
     subtype: "left"
     id: started_rotating_left
-
 
 condition: []
 
@@ -327,7 +329,7 @@ action:
               - conditions:
                   - condition: template
                     value_template: >
-                      {{ (dict((!input long_press_action)).values() | list | length) > 0 }}
+                      {{ long_press_action_target != {} }}
                 sequence:
                   - action: homeassistant.turn_on
                     target: !input long_press_action
@@ -353,4 +355,3 @@ action:
             data:
               brightness_step_pct: !input negative_brightness
               transition: !input transition_seconds
-

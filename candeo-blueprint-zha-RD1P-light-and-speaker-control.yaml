@@ -9,7 +9,7 @@ blueprint:
 
     Single press toggles the current target, double press switches targets, and rotation adjusts brightness or volume.
 
-    
+
     **Features:**
 
     - **Single press**: Toggles the active target  
@@ -22,7 +22,7 @@ blueprint:
       - ➕ Right rotation increases **brightness** or **volume**
       - ➖ Left rotation decreases **brightness** or **volume**
 
-    
+
     ⚡ **Advanced features:**
 
     - 🏠 Works with individual lights, groups, or areas
@@ -33,7 +33,7 @@ blueprint:
 
     - 🧠 Optional notifications to show the active target after switching
 
-    
+
     **🛠️ Setup Required:**
 
     Before using this blueprint, create this helper:
@@ -46,7 +46,7 @@ blueprint:
 
     - Options: lights, speaker
 
-    
+
     **How It Works:**
 
     - **Single Press**: Sends toggle to the target defined by the helper
@@ -55,7 +55,7 @@ blueprint:
 
     - **Rotate Knob**: Adjusts brightness for lights or volume for speaker using your step sizes
 
-    
+
     **Requirements:**
 
     - C-ZB-RD1P device in Remote Mode or Dual Purpose Mode
@@ -64,8 +64,8 @@ blueprint:
 
     - Dimmable lights for brightness control and a media_player that supports volume_level
 
-    
-    **Version**: 1.0
+
+    **Version**: 2026.6
 
     **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
 
@@ -194,12 +194,10 @@ triggers:
     subtype: "left"
     id: rotate_left
 
-
 condition: []
 
 action:
   - choose:
-
       # Single press -> toggle depending on helper
       - conditions:
           - condition: trigger
@@ -271,7 +269,11 @@ action:
                 {% set step = (volume_step_pct | int(5)) / 100 %}
                 {% set current = state_attr(speaker, 'volume_level') | float(0.5) %}
                 {% set new = current + step %}
-                {% if new > 1 %} 1 {% else %} {{ new }} {% endif %}
+                {% if new > 1 %}
+                  1
+                {% else %}
+                  {{ new | round(2) }}
+                {% endif %}
 
       # Rotate left -> decrease brightness or volume
       - conditions:
@@ -301,4 +303,9 @@ action:
                 {% set step = (volume_step_pct | int(5)) / 100 %}
                 {% set current = state_attr(speaker, 'volume_level') | float(0.5) %}
                 {% set new = current - step %}
-                {% if new < 0 %} 0 {% else %} {{ new }} {% endif %}
+                {% if new < 0 %}
+                  0
+                {% else %}
+                  {{ new | round(2) }}
+                {% endif %}
+

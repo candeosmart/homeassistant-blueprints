@@ -4,16 +4,16 @@ blueprint:
     **3-light control for C-ZB-RD1P (Remote Mode or Dual Purpose Mode) using ZHA**
 
     Use a Candeo RD1P in REM mode or DPM mode to control three smart lights from a single rotary knob.
-    
+
     A helper selects which light is active so the knob only affects that light.  
-    
+
     Single press toggles the selected light, double press moves to the next light, and rotation adjusts brightness.
 
-    
+
     **Features:**
 
     - **Single press**: Toggles the selected light on or off
-    
+
     - **Double press**: Cycles the selection (1 → 2 → 3 → 1)
 
     - **Rotary control:**
@@ -58,7 +58,7 @@ blueprint:
 
     - Dimmable target lights
 
-    **Version**: 1.6
+    **Version**: 2026.6
 
     **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
   domain: automation
@@ -191,7 +191,6 @@ triggers:
     type: "rotary_knob_continued_rotating"
     subtype: "left"
     id: started_rotating_left
-
 
 condition: []
 
