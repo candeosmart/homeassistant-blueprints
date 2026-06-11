@@ -138,7 +138,8 @@ blueprint:
       selector:
         boolean:
 
-mode: single
+mode: queued
+max: 4
 max_exceeded: silent
 
 variables:
