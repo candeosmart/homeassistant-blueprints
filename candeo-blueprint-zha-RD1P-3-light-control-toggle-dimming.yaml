@@ -141,7 +141,9 @@ blueprint:
           max: -1
           unit_of_measurement: "%"
 
-mode: single
+mode: queued
+max: 4
+max_exceeded: silent
 
 variables:
   enable_light_3: !input enable_light_3
