@@ -39,7 +39,7 @@ blueprint:
     - Wired light exposed as a Home Assistant `light` entity
 
 
-    **Version**: 1.0
+    **Version**: 2026.6
 
     **Compatible Devices**: Candeo C-ZB-RD1P-DPM
 
@@ -110,7 +110,8 @@ blueprint:
           selector:
             action: {}
 
-mode: single
+mode: queued
+max: 6
 max_exceeded: silent
 
 variables:
@@ -229,3 +230,4 @@ action:
               entity_id: !input wired_light
             data:
               brightness_step_pct: "{{ -1 * (brightness_step_pct | int) }}"
+

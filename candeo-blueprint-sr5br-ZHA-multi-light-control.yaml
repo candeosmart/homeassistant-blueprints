@@ -9,14 +9,17 @@ blueprint:
     • **Centre** button toggles the active light.  
     • **Rotary ring** dims the active light (right = brighter, left = darker).  
 
-    **ZHA events expected (custom quirk):**  
-    - `command`: `button_1_click | button_2_click | button_3_click | button_4_click | centre_button_click | centre_button_double_click`  
-    - `command`: `started_rotating_right | continued_rotating_right | started_rotating_left | continued_rotating_left`
+    **ZHA events expected:**  
+    - `remote_button_short_press`: `button_1 | button_2 | button_3 | button_4 | button_centre`  
+    - `rotary_knob_started_rotating`: `right | left`  
+    - `rotary_knob_continued_rotating`: `right | left`
 
     **Setup**  
       1) Create an **input_select** with options `1,2,3,4` (e.g. `input_select.sr5br_active_light`).  
       2) Select your SR5BR device (ZHA) and the four light entities below.  
       3) Adjust the brightness step sizes if desired.
+
+    **Version:** 2026.6
 
   domain: automation
 
@@ -83,77 +86,77 @@ blueprint:
           unit_of_measurement: "%"
 
 mode: queued
-max: 20
+max: 10
 max_exceeded: silent
 
-# ─────────────────────────── Triggers (new quirk commands) ───────────────────────────
-trigger:
+# ─────────────────────────── Triggers (ZHA device triggers) ───────────────────────────
+triggers:
   # Buttons 1..4 (press) select active index
-  - platform: event
-    event_type: zha_event
+  - trigger: device
+    device_id: !input sr5br_device
+    domain: zha
+    type: "remote_button_short_press"
+    subtype: "button_1"
     id: btn1
-    event_data:
-      device_id: !input sr5br_device
-      command: button_1_click
 
-  - platform: event
-    event_type: zha_event
+  - trigger: device
+    device_id: !input sr5br_device
+    domain: zha
+    type: "remote_button_short_press"
+    subtype: "button_2"
     id: btn2
-    event_data:
-      device_id: !input sr5br_device
-      command: button_2_click
 
-  - platform: event
-    event_type: zha_event
+  - trigger: device
+    device_id: !input sr5br_device
+    domain: zha
+    type: "remote_button_short_press"
+    subtype: "button_3"
     id: btn3
-    event_data:
-      device_id: !input sr5br_device
-      command: button_3_click
 
-  - platform: event
-    event_type: zha_event
+  - trigger: device
+    device_id: !input sr5br_device
+    domain: zha
+    type: "remote_button_short_press"
+    subtype: "button_4"
     id: btn4
-    event_data:
-      device_id: !input sr5br_device
-      command: button_4_click
 
-  # Centre press (toggle) and double-press (no change needed here functionally)
-  - platform: event
-    event_type: zha_event
+  # Centre press
+  - trigger: device
+    device_id: !input sr5br_device
+    domain: zha
+    type: "remote_button_short_press"
+    subtype: "button_centre"
     id: centre_press
-    event_data:
-      device_id: !input sr5br_device
-      command: centre_button_click
 
   # Rotary — Right (start/continue)
-  - platform: event
-    event_type: zha_event
-    id: rot_right_start
-    event_data:
-      device_id: !input sr5br_device
-      command: started_rotating_right
+  - trigger: device
+    device_id: !input sr5br_device
+    domain: zha
+    type: "rotary_knob_started_rotating"
+    subtype: "right"
+    id: rot_right
 
-  - platform: event
-    event_type: zha_event
-    id: rot_right_cont
-    event_data:
-      device_id: !input sr5br_device
-      command: continued_rotating_right
+  - trigger: device
+    device_id: !input sr5br_device
+    domain: zha
+    type: "rotary_knob_continued_rotating"
+    subtype: "right"
+    id: rot_right
 
   # Rotary — Left (start/continue)
-  - platform: event
-    event_type: zha_event
-    id: rot_left_start
-    event_data:
-      device_id: !input sr5br_device
-      command: started_rotating_left
+  - trigger: device
+    device_id: !input sr5br_device
+    domain: zha
+    type: "rotary_knob_started_rotating"
+    subtype: "left"
+    id: rot_left
 
-  - platform: event
-    event_type: zha_event
-    id: rot_left_cont
-    event_data:
-      device_id: !input sr5br_device
-      command: continued_rotating_left
+  - trigger: device
+    device_id: !input sr5br_device
+    domain: zha
+    type: "rotary_knob_continued_rotating"
+    subtype: "left"
+    id: rot_left
 
 condition: []
 
@@ -169,7 +172,9 @@ action:
 
   - choose:
       # Button 1..4: select helper option
-      - conditions: "{{ trigger.id == 'btn1' }}"
+      - conditions:
+          - condition: trigger
+            id: btn1
         sequence:
           - action: input_select.select_option
             target:
@@ -177,7 +182,9 @@ action:
             data:
               option: "1"
 
-      - conditions: "{{ trigger.id == 'btn2' }}"
+      - conditions:
+          - condition: trigger
+            id: btn2
         sequence:
           - action: input_select.select_option
             target:
@@ -185,7 +192,9 @@ action:
             data:
               option: "2"
 
-      - conditions: "{{ trigger.id == 'btn3' }}"
+      - conditions:
+          - condition: trigger
+            id: btn3
         sequence:
           - action: input_select.select_option
             target:
@@ -193,7 +202,9 @@ action:
             data:
               option: "3"
 
-      - conditions: "{{ trigger.id == 'btn4' }}"
+      - conditions:
+          - condition: trigger
+            id: btn4
         sequence:
           - action: input_select.select_option
             target:
@@ -202,7 +213,9 @@ action:
               option: "4"
 
       # Centre: toggle CURRENTLY selected light
-      - conditions: "{{ trigger.id == 'centre_press' }}"
+      - conditions:
+          - condition: trigger
+            id: centre_press
         sequence:
           - variables:
               resolved_target: >-
@@ -216,7 +229,9 @@ action:
               entity_id: "{{ resolved_target }}"
 
       # Ring right (started/continued): brighten CURRENTLY selected light
-      - conditions: "{{ trigger.id in ['rot_right_start','rot_right_cont'] }}"
+      - conditions:
+          - condition: trigger
+            id: rot_right
         sequence:
           - variables:
               resolved_target: >-
@@ -239,7 +254,9 @@ action:
               brightness_step_pct: !input step_up_pct
 
       # Ring left (started/continued): dim CURRENTLY selected light
-      - conditions: "{{ trigger.id in ['rot_left_start','rot_left_cont'] }}"
+      - conditions:
+          - condition: trigger
+            id: rot_left
         sequence:
           - variables:
               resolved_target: >-
@@ -261,4 +278,5 @@ action:
             data:
               brightness_step_pct: !input step_down_pct
 
-  - stop: "Handled zha_event for SR5BR"
+  - stop: "Handled ZHA event for SR5BR"
+
