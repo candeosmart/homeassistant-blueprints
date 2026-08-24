@@ -10,40 +10,28 @@ blueprint:
 
     **Features:**
 
-    - **Single press**: Toggles your wired light  
-    - **Double press**: Runs your custom action set  
-    - **Hold** and **Release**: Run separate custom actions  
+    - **Single press**: Toggles your wired light
+    - **Double press**: Runs your custom action set
+    - **Hold** and **Release**: Run separate custom actions
     - **Rotary control:**
       - ➕ Right rotation brightens by an adjustable step
       - ➖ Left rotation dims by an adjustable step
 
 
-    **🛠️ Setup Required:**
-
-    - Put your RD1-Pro into **Dual Purpose Mode (DPM)**.
-    - In the selector below, pick the RD1-Pro device with model **C-ZB-RD1P-DPM**.
-    - For the light, **choose the light entity from the same RD1-Pro device** so it controls the wired load.
-
-
-    **How It Works:**
-
-    - **Single Press**: `light.toggle` on the wired light entity  
-    - **Rotate Knob**: Applies `brightness_step_pct` up or down  
-    - **Double Press / Hold / Release**: Executes the action sequences you define
-
-
     **Requirements:**
 
-    - RD1-Pro in Dual Purpose Mode
+    - C-ZB-RD1P or C-ZB-RD1Pv2 in Dual Purpose Mode
     - ZHA with device actions available
     - Wired light exposed as a Home Assistant `light` entity
 
 
-    **Version**: 2026.6
+    **Version**: 2026.8
 
-    **Compatible Devices**: Candeo C-ZB-RD1P-DPM
+    **Compatible Devices**:
+    Candeo C-ZB-RD1P-DPM and C-ZB-RD1Pv2-DPM
 
   domain: automation
+
   homeassistant:
     min_version: 2024.6.0
 
@@ -51,21 +39,23 @@ blueprint:
     device_section:
       name: Device & Wired Light
       icon: mdi:devices
-      description: Select your RD1-Pro device in DPM and the wired light entity from the same device
       input:
         remote_device:
           name: RD1-Pro Device (DPM)
-          description: Select the RD1-Pro device that is in Dual Purpose Mode.
+          description: Select the RD1-Pro or RD1-Prov2 device in Dual Purpose Mode.
           selector:
             device:
               filter:
                 - integration: zha
                   manufacturer: Candeo
                   model: C-ZB-RD1P-DPM
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-DPM
 
         wired_light:
           name: Wired Light Entity
-          description: "Choose the light entity of the same RD1-Pro device. This should be the wired load."
+          description: "Choose the light entity of the same RD1-Pro device."
           selector:
             entity:
               filter:
@@ -74,11 +64,9 @@ blueprint:
     control_section:
       name: Control Settings
       icon: mdi:tune
-      description: Configure brightness step for the wired light
       input:
         brightness_step_pct:
           name: Brightness Step Percentage
-          description: How much to change brightness per rotation step
           default: 10
           selector:
             number:
@@ -89,23 +77,21 @@ blueprint:
     actions_section:
       name: Extra Actions
       icon: mdi:gesture-double-tap
-      description: Define what happens on double press, hold, and release
       input:
         on_double_press:
           name: Double Press Actions
-          description: Runs when the knob is double pressed
           default: []
           selector:
             action: {}
+
         on_hold:
           name: Hold Actions
-          description: Runs while the knob is held
           default: []
           selector:
             action: {}
+
         on_release:
           name: Release Actions
-          description: Runs when the knob is released
           default: []
           selector:
             action: {}
@@ -119,7 +105,6 @@ variables:
   brightness_step_pct: !input brightness_step_pct
 
 triggers:
-  # Press events
   - trigger: device
     device_id: !input remote_device
     domain: zha
@@ -134,7 +119,6 @@ triggers:
     subtype: "rotary_knob"
     id: double_pressed
 
-  # Hold and release events
   - trigger: device
     device_id: !input remote_device
     domain: zha
@@ -149,13 +133,13 @@ triggers:
     subtype: "rotary_knob"
     id: released
 
-  # Rotation right (treat started and rotating the same)
   - trigger: device
     device_id: !input remote_device
     domain: zha
     type: "rotary_knob_started_rotating"
     subtype: "right"
     id: rotate_right
+
   - trigger: device
     device_id: !input remote_device
     domain: zha
@@ -163,26 +147,24 @@ triggers:
     subtype: "right"
     id: rotate_right
 
-  # Rotation left (treat started and rotating the same)
   - trigger: device
     device_id: !input remote_device
     domain: zha
     type: "rotary_knob_started_rotating"
     subtype: "left"
     id: rotate_left
+
   - trigger: device
     device_id: !input remote_device
     domain: zha
     type: "rotary_knob_continued_rotating"
     subtype: "left"
     id: rotate_left
-
 
 condition: []
 
 action:
   - choose:
-      # Single press -> toggle wired light
       - conditions:
           - condition: trigger
             id: pressed
@@ -191,25 +173,21 @@ action:
             target:
               entity_id: !input wired_light
 
-      # Double press -> run user actions
       - conditions:
           - condition: trigger
             id: double_pressed
         sequence: !input on_double_press
 
-      # Hold -> run user actions
       - conditions:
           - condition: trigger
             id: held
         sequence: !input on_hold
 
-      # Release -> run user actions
       - conditions:
           - condition: trigger
             id: released
         sequence: !input on_release
 
-      # Rotate right -> brighten wired light
       - conditions:
           - condition: trigger
             id: rotate_right
@@ -220,7 +198,6 @@ action:
             data:
               brightness_step_pct: !input brightness_step_pct
 
-      # Rotate left -> dim wired light
       - conditions:
           - condition: trigger
             id: rotate_left
@@ -230,4 +207,3 @@ action:
               entity_id: !input wired_light
             data:
               brightness_step_pct: "{{ -1 * (brightness_step_pct | int) }}"
-

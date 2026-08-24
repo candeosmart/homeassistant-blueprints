@@ -9,11 +9,11 @@ blueprint:
 
     Single press toggles the current target, double press switches targets, and rotation adjusts brightness or volume.
 
-    
+
     **Features:**
 
-    - **Single press**: Toggles the active target  
-      - 💡 If target is **lights** it toggles the selected light, group, or area  
+    - **Single press**: Toggles the active target
+      - 💡 If target is **lights** it toggles the selected light, group, or area
       - 🔊 If target is **speaker** it plays or pauses the media player
 
     - **Double press**: Cycles the helper between **lights** and **speaker**
@@ -22,18 +22,15 @@ blueprint:
       - ➕ Right rotation increases **brightness** or **volume**
       - ➖ Left rotation decreases **brightness** or **volume**
 
-    
+
     ⚡ **Advanced features:**
 
     - 🏠 Works with individual lights, groups, or areas
-
     - 🎚️ Adjustable step sizes for brightness and volume
-
-    - 🔄 Smooth behavior with both **started_rotating** and **rotating** actions
-
+    - 🔄 Responds to both **started rotating** and **continued rotating** actions
     - 🧠 Optional notifications to show the active target after switching
 
-    
+
     **🛠️ Setup Required:**
 
     Before using this blueprint, create this helper:
@@ -46,32 +43,36 @@ blueprint:
 
     - Options: lights, speaker
 
-    
+
     **How It Works:**
 
     - **Single Press**: Sends toggle to the target defined by the helper
 
     - **Double Press**: Updates the helper to the next option and wraps around
 
-    - **Rotate Knob**: Adjusts brightness for lights or volume for speaker using your step sizes
+    - **Rotate Knob**: Adjusts brightness for lights or volume for speaker using repeated rotation actions
 
-    
+
     **Requirements:**
 
-    - C-ZB-RD1P device in Remote Mode or Dual Purpose Mode
+    - C-ZB-RD1P or C-ZB-RD1Pv2 device in Remote Mode or Dual Purpose Mode
 
     - zigbee2mqtt with action events available
 
     - Dimmable lights for brightness control and a media_player that supports volume_level
 
-    
-    **Version**: 1.0
 
-    **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
+    **Version**: 1.1
+
+    **Compatible Devices**:
+    Candeo C-ZB-RD1P and C-ZB-RD1Pv2
+    (Remote Mode or Dual Purpose Mode)
 
   domain: automation
+
   homeassistant:
     min_version: 2024.6.0
+
   input:
     device_section:
       name: Device & Targets
@@ -80,12 +81,14 @@ blueprint:
       input:
         remote_device:
           name: C-ZB-RD1P Remote Device
-          description: The C-ZB-RD1P device in remote mode or dual purpose mode.
+          description: The C-ZB-RD1P or C-ZB-RD1Pv2 device in Remote Mode or Dual Purpose Mode.
           selector:
             device:
               filter:
                 - model_id: C-ZB-RD1P-REM
                 - model_id: C-ZB-RD1P-DPM
+                - model_id: C-ZB-RD1Pv2-REM
+                - model_id: C-ZB-RD1Pv2-DPM
 
         target_lights:
           name: Target Lights
@@ -128,7 +131,7 @@ blueprint:
 
         volume_step_pct:
           name: Volume Step Percentage
-          description: How much to change volume per rotation step (0 to 100, maps to 0.0 to 1.0)
+          description: How much to change volume per rotation step
           default: 5
           selector:
             number:
@@ -149,7 +152,8 @@ blueprint:
           selector:
             boolean:
 
-mode: single
+mode: queued
+max: 6
 max_exceeded: silent
 
 variables:
@@ -161,7 +165,6 @@ variables:
   show_notifications: !input show_notifications
 
 triggers:
-  # Press events
   - trigger: device
     device_id: !input remote_device
     domain: mqtt
@@ -176,7 +179,7 @@ triggers:
     subtype: double_pressed
     id: double_pressed
 
-  # Rotation events
+  # Rotation right
   - trigger: device
     device_id: !input remote_device
     domain: mqtt
@@ -191,6 +194,7 @@ triggers:
     subtype: rotating_right
     id: rotate_right
 
+  # Rotation left
   - trigger: device
     device_id: !input remote_device
     domain: mqtt
@@ -209,8 +213,6 @@ condition: []
 
 action:
   - choose:
-
-      # Single press -> toggle depending on helper
       - conditions:
           - condition: trigger
             id: pressed
@@ -232,7 +234,6 @@ action:
             target:
               entity_id: !input speaker_entity
 
-      # Double press -> cycle helper (lights ↔ speaker)
       - conditions:
           - condition: trigger
             id: double_pressed
@@ -242,6 +243,7 @@ action:
               entity_id: !input selection_helper
             data:
               cycle: true
+
           - if:
               - condition: template
                 value_template: "{{ show_notifications }}"
@@ -253,7 +255,7 @@ action:
                     Target: {{ states(selection_helper) | title }}
                   notification_id: "rd1p_target"
 
-      # Rotate right -> increase brightness or volume
+      # Rotate right - lights
       - conditions:
           - condition: trigger
             id: rotate_right
@@ -266,6 +268,7 @@ action:
             data:
               brightness_step_pct: "{{ brightness_step_pct }}"
 
+      # Rotate right - speaker
       - conditions:
           - condition: trigger
             id: rotate_right
@@ -281,9 +284,13 @@ action:
                 {% set step = (volume_step_pct | int(5)) / 100 %}
                 {% set current = state_attr(speaker, 'volume_level') | float(0.5) %}
                 {% set new = current + step %}
-                {% if new > 1 %} 1 {% else %} {{ new }} {% endif %}
+                {% if new > 1 %}
+                  1
+                {% else %}
+                  {{ new | round(2) }}
+                {% endif %}
 
-      # Rotate left -> decrease brightness or volume
+      # Rotate left - lights
       - conditions:
           - condition: trigger
             id: rotate_left
@@ -296,6 +303,7 @@ action:
             data:
               brightness_step_pct: "{{ -1 * (brightness_step_pct | int) }}"
 
+      # Rotate left - speaker
       - conditions:
           - condition: trigger
             id: rotate_left
@@ -311,4 +319,8 @@ action:
                 {% set step = (volume_step_pct | int(5)) / 100 %}
                 {% set current = state_attr(speaker, 'volume_level') | float(0.5) %}
                 {% set new = current - step %}
-                {% if new < 0 %} 0 {% else %} {{ new }} {% endif %}
+                {% if new < 0 %}
+                  0
+                {% else %}
+                  {{ new | round(2) }}
+                {% endif %}

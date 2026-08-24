@@ -12,17 +12,18 @@ blueprint:
 
     **Features:**
 
-    - **Single press**: Toggles your chosen light, group, or area  
-    - **Double press**: Runs the selected numbered scene or script, then moves to the next number (wraps after N)  
-    - **Long press**: Runs one fixed scene or script you define  
+    - **Single press**: Toggles your chosen light, group, or area
+    - **Double press**: Runs the selected numbered scene or script, then moves to the next number (wraps after N)
+    - **Long press**: Runs one fixed scene or script you define
     - **Rotate right/left**: Dims the target lights by a configurable step for smooth brightness control
 
 
     ⚡ **Advanced features:**
 
-    - 🔢 Numeric helper is simple to manage and avoids typing entity IDs  
-    - 🧩 Mix scenes and scripts in any order across up to **6** slots  
-    - 🎚️ Adjustable dimming step for rotation  
+    - 🔢 Numeric helper is simple to manage and avoids typing entity IDs
+    - 🧩 Mix scenes and scripts in any order across up to **6** slots
+    - 🎚️ Adjustable dimming step for rotation
+    - 🔄 Responds to both started and continued rotation actions
     - 🔔 Optional notifications showing what ran and the next number
 
 
@@ -34,35 +35,39 @@ blueprint:
 
     "Create Helper" → "Dropdown"
 
-    - Name: "RD1P Scene/Script Index"  
-    - Options: `1, 2, 3, 4` (or extend to `1…N` up to 6)  
+    - Name: "RD1P Scene/Script Index"
+    - Options: `1, 2, 3, 4` (or extend to `1…N` up to 6)
     - Ensure the options are in numeric order
 
-    2) In the blueprint inputs select which scene or script occupies each numbered slot.  
+    2) In the blueprint inputs select which scene or script occupies each numbered slot.
+
     Fill the first **N** slots to match your helper options.
 
 
     **How It Works:**
 
-    - **Single Press**: `light.toggle` on your target  
-    - **Double Press**: Reads the helper’s number and runs the corresponding scene/script slot, then advances the helper to the next number  
-    - **Long Press**: Runs one fixed scene/script of your choice  
-    - **Rotate Right/Left**: Applies the **Brightness Step Percentage** up or down to the target lights
+    - **Single Press**: `light.toggle` on your target
+    - **Double Press**: Reads the helper’s number and runs the corresponding scene/script slot, then advances the helper to the next number
+    - **Long Press**: Runs one fixed scene/script of your choice
+    - **Rotate Right/Left**: Applies repeated brightness changes while the knob is rotated
 
 
     **Requirements:**
 
-    - C-ZB-RD1P in **Remote Mode** or **Dual Purpose Mode**  
-    - zigbee2mqtt publishing action events  
-    - A light, group, or area to toggle  
+    - C-ZB-RD1P or C-ZB-RD1Pv2 in **Remote Mode** or **Dual Purpose Mode**
+    - zigbee2mqtt publishing action events
+    - A light, group, or area to toggle
     - An input select helper with numeric options `1…N` and the first **N** scene/script slots configured in the blueprint
 
 
-    **Version**: 2.1
+    **Version**: 2.2
 
-    **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
+    **Compatible Devices**:
+    Candeo C-ZB-RD1P and C-ZB-RD1Pv2
+    (Remote Mode or Dual Purpose Mode)
 
   domain: automation
+
   homeassistant:
     min_version: 2024.6.0
 
@@ -74,12 +79,14 @@ blueprint:
       input:
         remote_device:
           name: C-ZB-RD1P Remote Device
-          description: The C-ZB-RD1P device in remote mode or dual purpose mode.
+          description: The C-ZB-RD1P or C-ZB-RD1Pv2 device in Remote Mode or Dual Purpose Mode.
           selector:
             device:
               filter:
                 - model_id: C-ZB-RD1P-REM
                 - model_id: C-ZB-RD1P-DPM
+                - model_id: C-ZB-RD1Pv2-REM
+                - model_id: C-ZB-RD1Pv2-DPM
 
         target_lights:
           name: Target Lights
@@ -107,7 +114,6 @@ blueprint:
               max: 6
               step: 1
 
-        # Scene/Script slots (fill the first N)
         scene_or_script_1:
           name: Slot 1
           description: Scene or Script to run when helper = 1
@@ -206,7 +212,8 @@ blueprint:
           selector:
             boolean:
 
-mode: single
+mode: queued
+max: 6
 max_exceeded: silent
 
 variables:
@@ -224,7 +231,6 @@ variables:
   brightness_step_pct: !input brightness_step_pct
 
 triggers:
-  # Button actions (presses)
   - trigger: device
     device_id: !input remote_device
     domain: mqtt
@@ -246,38 +252,40 @@ triggers:
     subtype: held
     id: held
 
-  # Rotation actions for dimming
+  # Rotation right
   - trigger: device
     device_id: !input remote_device
     domain: mqtt
     type: action
     subtype: started_rotating_right
-    id: started_rotating_right
+    id: rotate_right
+
   - trigger: device
     device_id: !input remote_device
     domain: mqtt
     type: action
     subtype: rotating_right
-    id: started_rotating_right
+    id: rotate_right
 
+  # Rotation left
   - trigger: device
     device_id: !input remote_device
     domain: mqtt
     type: action
     subtype: started_rotating_left
-    id: started_rotating_left
+    id: rotate_left
+
   - trigger: device
     device_id: !input remote_device
     domain: mqtt
     type: action
     subtype: rotating_left
-    id: started_rotating_left
+    id: rotate_left
 
 condition: []
 
 action:
   - choose:
-      # Single press -> toggle lights
       - conditions:
           - condition: trigger
             id: pressed
@@ -285,7 +293,6 @@ action:
           - action: light.toggle
             target: "{{ target_lights }}"
 
-      # Double press -> run slot indicated by numeric helper, then advance helper
       - conditions:
           - condition: trigger
             id: double_pressed
@@ -309,6 +316,7 @@ action:
                   - action: scene.turn_on
                     target:
                       entity_id: "{{ selected_entity }}"
+
               - conditions:
                   - condition: template
                     value_template: "{{ selected_entity | string | regex_match('^script\\.') }}"
@@ -316,6 +324,7 @@ action:
                   - action: script.turn_on
                     target:
                       entity_id: "{{ selected_entity }}"
+
             default:
               - action: persistent_notification.create
                 data:
@@ -323,14 +332,12 @@ action:
                   message: >
                     Helper value {{ idx }} is outside 1…{{ num_slots }} or slot {{ idx }} is empty.
 
-          # Advance the helper for next time (wrap)
           - action: input_select.select_next
             target:
               entity_id: !input index_helper
             data:
               cycle: true
 
-          # Optional notification
           - if:
               - condition: template
                 value_template: "{{ show_notifications }}"
@@ -342,13 +349,13 @@ action:
                     Ran: {{ selected_entity if selected_entity else 'None' }}. Next index: {{ states(index_helper) }} of {{ num_slots }}.
                   notification_id: "rd1p_cycle_info"
 
-      # Long press -> run fixed scene/script (if provided)
       - conditions:
           - condition: trigger
             id: held
         sequence:
           - variables:
               lp_entity: "{{ long_press_entity | string }}"
+
           - choose:
               - conditions:
                   - condition: template
@@ -357,6 +364,7 @@ action:
                   - action: scene.turn_on
                     target:
                       entity_id: "{{ lp_entity }}"
+
               - conditions:
                   - condition: template
                     value_template: "{{ lp_entity | regex_match('^script\\.') }}"
@@ -364,22 +372,21 @@ action:
                   - action: script.turn_on
                     target:
                       entity_id: "{{ lp_entity }}"
+
             default: []
 
-      # Rotate right -> brighten lights
       - conditions:
           - condition: trigger
-            id: started_rotating_right
+            id: rotate_right
         sequence:
           - action: light.turn_on
             target: "{{ target_lights }}"
             data:
               brightness_step_pct: "{{ brightness_step_pct | int }}"
 
-      # Rotate left -> dim lights
       - conditions:
           - condition: trigger
-            id: started_rotating_left
+            id: rotate_left
         sequence:
           - action: light.turn_on
             target: "{{ target_lights }}"

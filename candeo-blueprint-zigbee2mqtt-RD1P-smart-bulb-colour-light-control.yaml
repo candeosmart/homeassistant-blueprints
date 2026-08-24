@@ -3,7 +3,7 @@ blueprint:
   description: >
     **Smart Bulb control for C-ZB-RD1P (Remote Mode or Dual Purpose Mode) using zigbee2mqtt**
 
-    Use a Candeo RD1P in either REM mode or DPM mode to control your smart bulbs - on/off state, brightness, white temp, or colour.
+    Use a Candeo RD1P in either REM mode or DPM mode to control your smart bulbs - on/off state, brightness, white temperature, or colour.
 
 
     **Features:**
@@ -14,7 +14,7 @@ blueprint:
 
     - **Rotary control:**
       - ☀️ In **Brightness mode** - adjusts light brightness
-      - 🌡️ In **White balance mode** - adjusts color temperature (warm ↔ cool)
+      - 🌡️ In **White balance mode** - adjusts colour temperature (warm ↔ cool)
       - 🎨 In **Colour mode** - cycles through hue spectrum
 
 
@@ -44,7 +44,7 @@ blueprint:
 
     **How It Works:**
 
-    - **Single Press**: Toggles the chosen lights on/off  
+    - **Single Press**: Toggles the chosen lights on/off
 
     - **Double Press**: Cycles through the modes (brightness → white temp → colour → brightness...)
 
@@ -55,20 +55,24 @@ blueprint:
 
     **Requirements:**
 
-    - C-ZB-RD1P device must be in Remote Mode or Dual Purpose Mode
+    - C-ZB-RD1P or C-ZB-RD1Pv2 device must be in Remote Mode or Dual Purpose Mode
 
-    - Compatible smart lights with brightness/color temperature/color support
+    - Compatible smart lights with brightness / colour temperature / colour support
 
     - Input select helper for mode tracking
 
 
-    **Version**: 1.0
+    **Version**: 1.1
 
-    **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
+    **Compatible Devices**:
+    Candeo C-ZB-RD1P and C-ZB-RD1Pv2
+    (Remote Mode or Dual Purpose Mode)
 
   domain: automation
+
   homeassistant:
     min_version: 2024.6.0
+
   input:
     device_section:
       name: Device & Target Selection
@@ -77,12 +81,14 @@ blueprint:
       input:
         remote_device:
           name: C-ZB-RD1P Remote Device
-          description: The C-ZB-RD1P device in remote mode or dual purpose mode.
+          description: The C-ZB-RD1P or C-ZB-RD1Pv2 device in Remote Mode or Dual Purpose Mode.
           selector:
             device:
               filter:
                 - model_id: C-ZB-RD1P-REM
                 - model_id: C-ZB-RD1P-DPM
+                - model_id: C-ZB-RD1Pv2-REM
+                - model_id: C-ZB-RD1Pv2-DPM
 
         target_lights:
           name: Target Lights
@@ -116,14 +122,14 @@ blueprint:
               unit_of_measurement: "%"
 
         color_temp_step:
-          name: Color Temperature Step
-          description: How much to change color temperature per rotation step (10-100 mired)
-          default: 25
+          name: Colour Temperature Step
+          description: How much to change colour temperature per rotation step in Kelvin
+          default: 250
           selector:
             number:
               min: 10
-              max: 100
-              unit_of_measurement: "mired"
+              max: 500
+              unit_of_measurement: "K"
 
         hue_step:
           name: Hue Step
@@ -148,7 +154,7 @@ blueprint:
           selector:
             boolean:
 
-mode: single
+mode: queued
 max_exceeded: silent
 
 variables:
@@ -230,6 +236,7 @@ action:
                       entity_id: !input mode_helper
                     data:
                       option: "white_temp"
+
                   - if:
                       - condition: template
                         value_template: "{{ show_notifications }}"
@@ -250,6 +257,7 @@ action:
                       entity_id: !input mode_helper
                     data:
                       option: "colour"
+
                   - if:
                       - condition: template
                         value_template: "{{ show_notifications }}"
@@ -270,6 +278,7 @@ action:
                       entity_id: !input mode_helper
                     data:
                       option: "brightness"
+
                   - if:
                       - condition: template
                         value_template: "{{ show_notifications }}"
@@ -286,6 +295,7 @@ action:
                   entity_id: !input mode_helper
                 data:
                   option: "brightness"
+
               - if:
                   - condition: template
                     value_template: "{{ show_notifications }}"
@@ -314,6 +324,7 @@ action:
                       brightness_step_pct: "{{ brightness_step }}"
 
               # White Temperature Mode
+              # Higher Kelvin = cooler/whiter
               - conditions:
                   - condition: state
                     entity_id: !input mode_helper
@@ -322,20 +333,41 @@ action:
                   - action: light.turn_on
                     target: "{{ target_lights }}"
                     data:
-                      color_temp: >
+                      color_temp_kelvin: >
                         {% if target_lights.entity_id is defined %}
                           {% set entity = target_lights.entity_id %}
                         {% elif target_lights.area_id is defined %}
-                          {% set entity = area_entities(target_lights.area_id) | select('match', 'light\.') | list | first %}
+                          {% set entity = area_entities(target_lights.area_id)
+                            | select('match', 'light\\.')
+                            | list
+                            | first %}
                         {% else %}
-                          {% set entity = expand(target_lights.entity_id) | map(attribute='entity_id') | list | first %}
+                          {% set entity = expand(target_lights.entity_id)
+                            | map(attribute='entity_id')
+                            | list
+                            | first %}
                         {% endif %}
+
                         {% if entity %}
-                          {% set current = state_attr(entity, 'color_temp') | int(250) %}
-                          {% set new_temp = current + color_temp_step %}
-                          {% if new_temp > 500 %}500{% else %}{{ new_temp }}{% endif %}
+                          {% set current =
+                            state_attr(entity, 'color_temp_kelvin')
+                            | int(4000) %}
+                          {% set min_kelvin =
+                            state_attr(entity, 'min_color_temp_kelvin')
+                            | int(2000) %}
+                          {% set max_kelvin =
+                            state_attr(entity, 'max_color_temp_kelvin')
+                            | int(6500) %}
+                          {% set new_temp =
+                            current + (color_temp_step | int) %}
+
+                          {% if new_temp > max_kelvin %}
+                            {{ max_kelvin }}
+                          {% else %}
+                            {{ new_temp }}
+                          {% endif %}
                         {% else %}
-                          250
+                          4000
                         {% endif %}
 
               # Colour Mode (Hue)
@@ -351,14 +383,28 @@ action:
                         {% if target_lights.entity_id is defined %}
                           {% set entity = target_lights.entity_id %}
                         {% elif target_lights.area_id is defined %}
-                          {% set entity = area_entities(target_lights.area_id) | select('match', 'light\.') | list | first %}
+                          {% set entity = area_entities(target_lights.area_id)
+                            | select('match', 'light\\.')
+                            | list
+                            | first %}
                         {% else %}
-                          {% set entity = expand(target_lights.entity_id) | map(attribute='entity_id') | list | first %}
+                          {% set entity = expand(target_lights.entity_id)
+                            | map(attribute='entity_id')
+                            | list
+                            | first %}
                         {% endif %}
+
                         {% if entity %}
-                          {% set current_hue = state_attr(entity, 'hs_color')[0] | int(0) if state_attr(entity, 'hs_color') else 0 %}
-                          {% set current_sat = state_attr(entity, 'hs_color')[1] | int(100) if state_attr(entity, 'hs_color') else 100 %}
-                          {% set new_hue = (current_hue + hue_step) % 360 %}
+                          {% set current_hue =
+                            state_attr(entity, 'hs_color')[0] | int(0)
+                            if state_attr(entity, 'hs_color')
+                            else 0 %}
+                          {% set current_sat =
+                            state_attr(entity, 'hs_color')[1] | int(100)
+                            if state_attr(entity, 'hs_color')
+                            else 100 %}
+                          {% set new_hue =
+                            (current_hue + hue_step) % 360 %}
                           [{{ new_hue }}, {{ current_sat }}]
                         {% else %}
                           [0, 100]
@@ -382,6 +428,7 @@ action:
                       brightness_step_pct: "{{ -brightness_step }}"
 
               # White Temperature Mode
+              # Lower Kelvin = warmer
               - conditions:
                   - condition: state
                     entity_id: !input mode_helper
@@ -390,20 +437,41 @@ action:
                   - action: light.turn_on
                     target: "{{ target_lights }}"
                     data:
-                      color_temp: >
+                      color_temp_kelvin: >
                         {% if target_lights.entity_id is defined %}
                           {% set entity = target_lights.entity_id %}
                         {% elif target_lights.area_id is defined %}
-                          {% set entity = area_entities(target_lights.area_id) | select('match', 'light\.') | list | first %}
+                          {% set entity = area_entities(target_lights.area_id)
+                            | select('match', 'light\\.')
+                            | list
+                            | first %}
                         {% else %}
-                          {% set entity = expand(target_lights.entity_id) | map(attribute='entity_id') | list | first %}
+                          {% set entity = expand(target_lights.entity_id)
+                            | map(attribute='entity_id')
+                            | list
+                            | first %}
                         {% endif %}
+
                         {% if entity %}
-                          {% set current = state_attr(entity, 'color_temp') | int(250) %}
-                          {% set new_temp = current - color_temp_step %}
-                          {% if new_temp < 153 %}153{% else %}{{ new_temp }}{% endif %}
+                          {% set current =
+                            state_attr(entity, 'color_temp_kelvin')
+                            | int(4000) %}
+                          {% set min_kelvin =
+                            state_attr(entity, 'min_color_temp_kelvin')
+                            | int(2000) %}
+                          {% set max_kelvin =
+                            state_attr(entity, 'max_color_temp_kelvin')
+                            | int(6500) %}
+                          {% set new_temp =
+                            current - (color_temp_step | int) %}
+
+                          {% if new_temp < min_kelvin %}
+                            {{ min_kelvin }}
+                          {% else %}
+                            {{ new_temp }}
+                          {% endif %}
                         {% else %}
-                          250
+                          4000
                         {% endif %}
 
               # Colour Mode (Hue)
@@ -419,14 +487,28 @@ action:
                         {% if target_lights.entity_id is defined %}
                           {% set entity = target_lights.entity_id %}
                         {% elif target_lights.area_id is defined %}
-                          {% set entity = area_entities(target_lights.area_id) | select('match', 'light\.') | list | first %}
+                          {% set entity = area_entities(target_lights.area_id)
+                            | select('match', 'light\\.')
+                            | list
+                            | first %}
                         {% else %}
-                          {% set entity = expand(target_lights.entity_id) | map(attribute='entity_id') | list | first %}
+                          {% set entity = expand(target_lights.entity_id)
+                            | map(attribute='entity_id')
+                            | list
+                            | first %}
                         {% endif %}
+
                         {% if entity %}
-                          {% set current_hue = state_attr(entity, 'hs_color')[0] | int(0) if state_attr(entity, 'hs_color') else 0 %}
-                          {% set current_sat = state_attr(entity, 'hs_color')[1] | int(100) if state_attr(entity, 'hs_color') else 100 %}
-                          {% set new_hue = (current_hue - hue_step) % 360 %}
+                          {% set current_hue =
+                            state_attr(entity, 'hs_color')[0] | int(0)
+                            if state_attr(entity, 'hs_color')
+                            else 0 %}
+                          {% set current_sat =
+                            state_attr(entity, 'hs_color')[1] | int(100)
+                            if state_attr(entity, 'hs_color')
+                            else 100 %}
+                          {% set new_hue =
+                            (current_hue - hue_step) % 360 %}
                           [{{ new_hue }}, {{ current_sat }}]
                         {% else %}
                           [0, 100]

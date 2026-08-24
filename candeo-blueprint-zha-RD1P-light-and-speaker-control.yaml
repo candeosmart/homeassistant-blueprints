@@ -12,8 +12,8 @@ blueprint:
 
     **Features:**
 
-    - **Single press**: Toggles the active target  
-      - 💡 If target is **lights** it toggles the selected light, group, or area  
+    - **Single press**: Toggles the active target
+      - 💡 If target is **lights** it toggles the selected light, group, or area
       - 🔊 If target is **speaker** it plays or pauses the media player
 
     - **Double press**: Cycles the helper between **lights** and **speaker**
@@ -23,60 +23,28 @@ blueprint:
       - ➖ Left rotation decreases **brightness** or **volume**
 
 
-    ⚡ **Advanced features:**
-
-    - 🏠 Works with individual lights, groups, or areas
-
-    - 🎚️ Adjustable step sizes for brightness and volume
-
-    - 🔄 Smooth behavior with both **Started rotating** and **Rotating** actions
-
-    - 🧠 Optional notifications to show the active target after switching
-
-
-    **🛠️ Setup Required:**
-
-    Before using this blueprint, create this helper:
-
-    Settings → Devices & Services → Helpers
-
-    "Create Helper" → "Dropdown"
-
-    - Name: "RD1P Active Target"
-
-    - Options: lights, speaker
-
-
-    **How It Works:**
-
-    - **Single Press**: Sends toggle to the target defined by the helper
-
-    - **Double Press**: Updates the helper to the next option and wraps around
-
-    - **Rotate Knob**: Adjusts brightness for lights or volume for speaker using your step sizes
-
-
     **Requirements:**
 
-    - C-ZB-RD1P device in Remote Mode or Dual Purpose Mode
-
+    - C-ZB-RD1P or C-ZB-RD1Pv2 device in Remote Mode or Dual Purpose Mode
     - ZHA with device actions available
+    - Dimmable lights and a media_player supporting volume_level
 
-    - Dimmable lights for brightness control and a media_player that supports volume_level
 
+    **Version**: 2026.8
 
-    **Version**: 2026.6
-
-    **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
+    **Compatible Devices**:
+    Candeo C-ZB-RD1P and C-ZB-RD1Pv2
+    (Remote Mode or Dual Purpose Mode)
 
   domain: automation
+
   homeassistant:
     min_version: 2024.6.0
 
   input:
     remote_device:
       name: Candeo RD1-Pro Dimming Switch
-      description: The C-ZB-RD1P device in remote mode or dual purpose mode.
+      description: The C-ZB-RD1P or C-ZB-RD1Pv2 device in Remote Mode or Dual Purpose Mode.
       selector:
         device:
           filter:
@@ -86,10 +54,15 @@ blueprint:
             - integration: zha
               manufacturer: Candeo
               model: C-ZB-RD1P-DPM
+            - integration: zha
+              manufacturer: Candeo
+              model: C-ZB-RD1Pv2-REM
+            - integration: zha
+              manufacturer: Candeo
+              model: C-ZB-RD1Pv2-DPM
 
     target_lights:
       name: Target Lights
-      description: "Light, light group, or area to control when the helper is set to lights"
       selector:
         target:
           entity:
@@ -97,7 +70,6 @@ blueprint:
 
     speaker_entity:
       name: Speaker (media_player)
-      description: "Media player to control when the helper is set to speaker"
       selector:
         entity:
           filter:
@@ -105,7 +77,6 @@ blueprint:
 
     selection_helper:
       name: Active Target Helper
-      description: "Input select that holds the current target (lights or speaker)"
       selector:
         entity:
           filter:
@@ -113,7 +84,6 @@ blueprint:
 
     brightness_step_pct:
       name: Brightness Step Percentage
-      description: "How much to change brightness per rotation step"
       default: 10
       selector:
         number:
@@ -123,7 +93,6 @@ blueprint:
 
     volume_step_pct:
       name: Volume Step Percentage
-      description: "How much to change volume per rotation step (0 to 100, maps to 0.0 to 1.0)"
       default: 5
       selector:
         number:
@@ -133,13 +102,12 @@ blueprint:
 
     show_notifications:
       name: Show Target Notifications
-      description: "Display a notification when switching between lights and speaker"
       default: true
       selector:
         boolean:
 
 mode: queued
-max: 4
+max: 6
 max_exceeded: silent
 
 variables:
@@ -151,7 +119,6 @@ variables:
   show_notifications: !input show_notifications
 
 triggers:
-  # Press events
   - trigger: device
     device_id: !input remote_device
     domain: zha
@@ -166,7 +133,6 @@ triggers:
     subtype: "rotary_knob"
     id: double_pressed
 
-  # Rotation events
   - trigger: device
     device_id: !input remote_device
     domain: zha
@@ -199,7 +165,6 @@ condition: []
 
 action:
   - choose:
-      # Single press -> toggle depending on helper
       - conditions:
           - condition: trigger
             id: pressed
@@ -221,7 +186,6 @@ action:
             target:
               entity_id: !input speaker_entity
 
-      # Double press -> cycle helper (lights ↔ speaker)
       - conditions:
           - condition: trigger
             id: double_pressed
@@ -231,6 +195,7 @@ action:
               entity_id: !input selection_helper
             data:
               cycle: true
+
           - if:
               - condition: template
                 value_template: "{{ show_notifications }}"
@@ -242,7 +207,6 @@ action:
                     Target: {{ states(selection_helper) | title }}
                   notification_id: "rd1p_target"
 
-      # Rotate right -> increase brightness or volume
       - conditions:
           - condition: trigger
             id: rotate_right
@@ -276,7 +240,6 @@ action:
                   {{ new | round(2) }}
                 {% endif %}
 
-      # Rotate left -> decrease brightness or volume
       - conditions:
           - condition: trigger
             id: rotate_left
@@ -309,4 +272,3 @@ action:
                 {% else %}
                   {{ new | round(2) }}
                 {% endif %}
-

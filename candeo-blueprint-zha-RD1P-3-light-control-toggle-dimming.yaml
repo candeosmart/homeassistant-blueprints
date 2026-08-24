@@ -5,7 +5,7 @@ blueprint:
 
     Use a Candeo RD1P in REM mode or DPM mode to control three smart lights from a single rotary knob.
 
-    A helper selects which light is active so the knob only affects that light.  
+    A helper selects which light is active so the knob only affects that light.
 
     Single press toggles the selected light, double press moves to the next light, and rotation adjusts brightness.
 
@@ -20,11 +20,12 @@ blueprint:
       - ➕ Right rotation brightens by an adjustable step
       - ➖ Left rotation dims by an adjustable step
 
+
     ⚡ **Advanced features:**
 
     - 💡 Designed for individual lights
 
-    - 🔄 Responds to **Started rotating left/right** and **Rotating left/right** actions for smooth dimming
+    - 🔄 Responds to both **started rotating** and **continued rotating** actions for smooth dimming
 
     - 🧠 Helper-driven selection keeps control predictable and simple
 
@@ -41,34 +42,40 @@ blueprint:
 
     - Options: 1, 2, 3
 
+
     **How It Works:**
 
     - **Single Press**: Toggles only the currently selected light
 
     - **Double Press**: Updates the helper to the next option and wraps around
 
-    - **Rotate Knob**: Applies `brightness_step_pct` up or down to the selected light
+    - **Rotate Knob**: Applies repeated brightness changes while the knob is rotated
 
 
     **Requirements:**
 
-    - C-ZB-RD1P device in Remote Mode or Dual Purpose Mode
+    - C-ZB-RD1P or C-ZB-RD1Pv2 device in Remote Mode or Dual Purpose Mode
 
     - ZHA with device actions available
 
     - Dimmable target lights
 
-    **Version**: 2026.6
 
-    **Compatible Devices**: Candeo C-ZB-RD1P (Remote Mode or Dual Purpose Mode)
+    **Version**: 2026.8
+
+    **Compatible Devices**:
+    Candeo C-ZB-RD1P and C-ZB-RD1Pv2
+    (Remote Mode or Dual Purpose Mode)
+
   domain: automation
+
   homeassistant:
     min_version: 2024.6.0
 
   input:
     remote_device:
       name: Candeo RD1-Pro Dimming Switch
-      description: The C-ZB-RD1P device in remote mode or dual purpose mode.
+      description: The C-ZB-RD1P or C-ZB-RD1Pv2 device in Remote Mode or Dual Purpose Mode.
       selector:
         device:
           filter:
@@ -78,6 +85,12 @@ blueprint:
             - integration: zha
               manufacturer: Candeo
               model: C-ZB-RD1P-DPM
+            - integration: zha
+              manufacturer: Candeo
+              model: C-ZB-RD1Pv2-REM
+            - integration: zha
+              manufacturer: Candeo
+              model: C-ZB-RD1Pv2-DPM
 
     dimming_select:
       name: Dimming Light Selector (Your Helper)
@@ -142,14 +155,13 @@ blueprint:
           unit_of_measurement: "%"
 
 mode: queued
-max: 4
+max: 6
 max_exceeded: silent
 
 variables:
   enable_light_3: !input enable_light_3
 
 triggers:
-  # Press events
   - trigger: device
     device_id: !input remote_device
     domain: zha
@@ -164,41 +176,38 @@ triggers:
     subtype: "rotary_knob"
     id: double_pressed
 
-  # Rotation events (right)
   - trigger: device
     device_id: !input remote_device
     domain: zha
     type: "rotary_knob_started_rotating"
     subtype: "right"
-    id: started_rotating_right
+    id: rotate_right
 
   - trigger: device
     device_id: !input remote_device
     domain: zha
     type: "rotary_knob_continued_rotating"
     subtype: "right"
-    id: started_rotating_right
+    id: rotate_right
 
-  # Rotation events (left)
   - trigger: device
     device_id: !input remote_device
     domain: zha
     type: "rotary_knob_started_rotating"
     subtype: "left"
-    id: started_rotating_left
+    id: rotate_left
 
   - trigger: device
     device_id: !input remote_device
     domain: zha
     type: "rotary_knob_continued_rotating"
     subtype: "left"
-    id: started_rotating_left
+    id: rotate_left
 
 condition: []
 
 action:
   - choose:
-      # Single press -> toggle selected light
       - conditions:
           - condition: trigger
             id: pressed
@@ -231,7 +240,6 @@ action:
           - action: light.toggle
             target: !input light_3
 
-      # Double press -> cycle helper (skip 3 if disabled)
       - conditions:
           - condition: trigger
             id: double_pressed
@@ -258,6 +266,7 @@ action:
                           entity_id: !input dimming_select
                         data:
                           option: "2"
+
                   - conditions:
                       - condition: state
                         entity_id: !input dimming_select
@@ -268,6 +277,7 @@ action:
                           entity_id: !input dimming_select
                         data:
                           option: "1"
+
                   - conditions:
                       - condition: state
                         entity_id: !input dimming_select
@@ -279,10 +289,9 @@ action:
                         data:
                           option: "1"
 
-      # Rotate right -> brighten selected light
       - conditions:
           - condition: trigger
-            id: started_rotating_right
+            id: rotate_right
           - condition: state
             entity_id: !input dimming_select
             state: "1"
@@ -294,7 +303,7 @@ action:
 
       - conditions:
           - condition: trigger
-            id: started_rotating_right
+            id: rotate_right
           - condition: state
             entity_id: !input dimming_select
             state: "2"
@@ -306,7 +315,7 @@ action:
 
       - conditions:
           - condition: trigger
-            id: started_rotating_right
+            id: rotate_right
           - condition: template
             value_template: "{{ enable_light_3 }}"
           - condition: state
@@ -318,10 +327,9 @@ action:
             data:
               brightness_step_pct: !input brightness_step_pct
 
-      # Rotate left -> dim selected light
       - conditions:
           - condition: trigger
-            id: started_rotating_left
+            id: rotate_left
           - condition: state
             entity_id: !input dimming_select
             state: "1"
@@ -333,7 +341,7 @@ action:
 
       - conditions:
           - condition: trigger
-            id: started_rotating_left
+            id: rotate_left
           - condition: state
             entity_id: !input dimming_select
             state: "2"
@@ -345,7 +353,7 @@ action:
 
       - conditions:
           - condition: trigger
-            id: started_rotating_left
+            id: rotate_left
           - condition: template
             value_template: "{{ enable_light_3 }}"
           - condition: state
