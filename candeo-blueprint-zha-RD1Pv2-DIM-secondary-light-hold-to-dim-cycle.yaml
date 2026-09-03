@@ -1,0 +1,382 @@
+blueprint:
+  name: Candeo C-ZB-RD1Pv2 (DIM mode) - Secondary Light Control with Hold-to-Dim Cycle in ZHA
+  description: >
+    **Control a secondary Home Assistant light from a Candeo RD1-Pro v2 in DIM Mode using ZHA**
+
+    Keep normal local control of the RD1-Pro's wired light while using the
+    v2 Extra Button Commands to control a second dimmable light.
+
+
+    **Controls:**
+
+    - 💡 **Single press**: Continues to control the RD1-Pro wired light locally
+
+    - 🎚️ **Rotary control**: Continues to dim the RD1-Pro wired light locally
+
+    - 👆👆 **Double press**: Toggles the selected secondary light
+
+    - ✋ **Hold**: Continuously cycles the secondary light brightness
+      **up → down → up → down** while the knob remains held
+
+    - 👋 **Release**: Immediately stops the brightness cycle
+
+
+    The hold cycle begins by brightening from the current level. If the
+    secondary light is off, it is first turned on at the configured minimum
+    brightness and then begins brightening.
+
+
+    ⚠️ **V2 FIRMWARE REQUIRED**
+
+    Minimum supported RD1-Pro firmware:
+
+    - **Zigbee firmware: v2.0.0**
+
+    - **MCU firmware: v2.0.0**
+
+    A ZHA/device-handler version containing RD1-Pro v2 support is also required.
+
+
+    **Extra Button Commands must be enabled:**
+
+    Open the RD1-Pro device in Home Assistant and set
+    **Extra button commands** to **Enabled**.
+
+    Enabling Extra Button Commands introduces approximately a 0.5 second
+    delay to normal single-press detection so that a double press can be
+    recognised.
+
+
+    **Important Notes:**
+
+    - This blueprint is specifically for **DIM Mode**.
+
+    - The secondary target must be a **dimmable Home Assistant light**.
+
+    - The brightness cycle uses absolute brightness levels and never
+      intentionally dims below the configured minimum brightness.
+
+    - Release uses Home Assistant automation **restart mode** to cancel the
+      active hold loop immediately.
+
+    - A configurable safety timeout stops the cycle if a Release event is
+      unexpectedly missed.
+
+    - Brightness steps are calculated internally rather than relying on rapid
+      Home Assistant state updates, improving reliability with slower lights.
+
+
+    **Version**: 2026.8
+
+    **Firmware Requirement**:
+    RD1-Pro v2 - Zigbee v2.0.0 / MCU v2.0.0 or later
+
+    **Compatible Device**:
+    Candeo C-ZB-RD1Pv2-DIM
+
+  domain: automation
+
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    device_section:
+      name: RD1-Pro v2
+      icon: mdi:knob
+      input:
+        remote_device:
+          name: Candeo RD1-Pro v2 (DIM Mode)
+          description: >
+            Select the RD1-Pro running v2 firmware in DIM Mode.
+            Extra Button Commands must be enabled on the ZHA device.
+          selector:
+            device:
+              filter:
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-DIM
+
+    light_section:
+      name: Secondary Light
+      icon: mdi:lightbulb-outline
+      description: >
+        Select the additional dimmable light controlled by double press and hold.
+      input:
+        secondary_light:
+          name: Secondary Dimmable Light
+          description: >
+            Choose a dimmable Home Assistant light entity.
+          selector:
+            entity:
+              filter:
+                - domain: light
+
+    dimming_section:
+      name: Hold-to-Dim Settings
+      icon: mdi:brightness-6
+      description: >
+        Configure the speed and brightness range of the continuous hold cycle.
+      input:
+        brightness_step_pct:
+          name: Brightness Step
+          description: >
+            Percentage change applied on each step of the hold cycle.
+            Smaller values give finer control.
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 20
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+
+        step_delay_ms:
+          name: Time Between Steps
+          description: >
+            Delay between brightness changes. Lower values dim more quickly.
+          default: 200
+          selector:
+            number:
+              min: 100
+              max: 1000
+              step: 50
+              unit_of_measurement: ms
+              mode: slider
+
+        minimum_brightness_pct:
+          name: Minimum Cycle Brightness
+          description: >
+            Lowest brightness used during the hold cycle. The blueprint will
+            not intentionally dim the secondary light below this level.
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 50
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+
+        maximum_hold_seconds:
+          name: Hold Safety Timeout
+          description: >
+            Maximum time a hold-to-dim cycle may run if a Release event is
+            unexpectedly missed. Release normally stops the cycle immediately.
+          default: 30
+          selector:
+            number:
+              min: 5
+              max: 120
+              step: 5
+              unit_of_measurement: s
+              mode: slider
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  secondary_light: !input secondary_light
+  brightness_step_pct: !input brightness_step_pct
+  step_delay_ms: !input step_delay_ms
+  minimum_brightness_pct: !input minimum_brightness_pct
+  maximum_hold_seconds: !input maximum_hold_seconds
+  step_brightness: >-
+    {{ [1, (((brightness_step_pct | int) * 255 / 100) | round(0) | int)] | max }}
+  min_brightness: >-
+    {{ [1, (((minimum_brightness_pct | int) * 255 / 100) | round(0) | int)] | max }}
+
+triggers:
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_double_press
+    subtype: rotary_knob
+    id: double_pressed
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_long_press
+    subtype: rotary_knob
+    id: held
+
+  # This trigger deliberately performs no service call. Because the automation
+  # runs in restart mode, Release immediately cancels an active Hold cycle.
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_long_release
+    subtype: rotary_knob
+    id: released
+
+condition: []
+
+action:
+  - choose:
+      # ------------------------------------------------------------
+      # Double press -> toggle secondary light
+      # ------------------------------------------------------------
+      - conditions:
+          - condition: trigger
+            id: double_pressed
+        sequence:
+          - action: light.toggle
+            target:
+              entity_id: !input secondary_light
+
+      # ------------------------------------------------------------
+      # Hold -> continuously cycle brightness until Release restarts
+      # this automation, or until the safety timeout is reached.
+      # ------------------------------------------------------------
+      - conditions:
+          - condition: trigger
+            id: held
+        sequence:
+          # Reject on/off-only lights before starting the cycle.
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >-
+                      {% set modes = state_attr(secondary_light, 'supported_color_modes') or [] %}
+                      {{ modes | length > 0 and not (modes | length == 1 and 'onoff' in modes) }}
+                sequence:
+                  - variables:
+                      starting_brightness: >-
+                        {{ state_attr(secondary_light, 'brightness') | int(min_brightness | int) }}
+
+                  # If the light is off, begin at the configured minimum.
+                  - if:
+                      - condition: template
+                        value_template: "{{ is_state(secondary_light, 'off') }}"
+                    then:
+                      - action: light.turn_on
+                        target:
+                          entity_id: !input secondary_light
+                        data:
+                          brightness: "{{ min_brightness | int }}"
+
+                      - delay:
+                          milliseconds: 300
+
+                      - variables:
+                          starting_brightness: "{{ min_brightness | int }}"
+
+                  - variables:
+                      hold_started: "{{ as_timestamp(now()) }}"
+                      steps_to_max: >-
+                        {% set current = starting_brightness | int %}
+                        {% set step = step_brightness | int %}
+                        {{ [0, (((255 - current) / step) | round(0, 'ceil') | int)] | max }}
+                      full_range_steps: >-
+                        {% set minimum = min_brightness | int %}
+                        {% set step = step_brightness | int %}
+                        {{ [1, (((255 - minimum) / step) | round(0, 'ceil') | int)] | max }}
+
+                  # First brighten from the current brightness to maximum.
+                  - repeat:
+                      count: "{{ steps_to_max | int }}"
+                      sequence:
+                        - condition: template
+                          value_template: >-
+                            {{
+                              (as_timestamp(now()) - (hold_started | float(0)))
+                              < (maximum_hold_seconds | int)
+                            }}
+
+                        - action: light.turn_on
+                          target:
+                            entity_id: !input secondary_light
+                          data:
+                            brightness: >-
+                              {{
+                                [
+                                  255,
+                                  (starting_brightness | int)
+                                  + ((repeat.index | int) * (step_brightness | int))
+                                ] | min
+                              }}
+
+                        - delay:
+                            milliseconds: "{{ step_delay_ms | int }}"
+
+                  # Continue down -> up -> down -> up until released.
+                  - repeat:
+                      while:
+                        - condition: template
+                          value_template: >-
+                            {{
+                              (as_timestamp(now()) - (hold_started | float(0)))
+                              < (maximum_hold_seconds | int)
+                            }}
+                      sequence:
+                        # Dim from maximum to configured minimum.
+                        - repeat:
+                            count: "{{ full_range_steps | int }}"
+                            sequence:
+                              - condition: template
+                                value_template: >-
+                                  {{
+                                    (as_timestamp(now()) - (hold_started | float(0)))
+                                    < (maximum_hold_seconds | int)
+                                  }}
+
+                              - action: light.turn_on
+                                target:
+                                  entity_id: !input secondary_light
+                                data:
+                                  brightness: >-
+                                    {{
+                                      [
+                                        min_brightness | int,
+                                        255 - ((repeat.index | int) * (step_brightness | int))
+                                      ] | max
+                                    }}
+
+                              - delay:
+                                  milliseconds: "{{ step_delay_ms | int }}"
+
+                        # Brighten from configured minimum to maximum.
+                        - repeat:
+                            count: "{{ full_range_steps | int }}"
+                            sequence:
+                              - condition: template
+                                value_template: >-
+                                  {{
+                                    (as_timestamp(now()) - (hold_started | float(0)))
+                                    < (maximum_hold_seconds | int)
+                                  }}
+
+                              - action: light.turn_on
+                                target:
+                                  entity_id: !input secondary_light
+                                data:
+                                  brightness: >-
+                                    {{
+                                      [
+                                        255,
+                                        (min_brightness | int)
+                                        + ((repeat.index | int) * (step_brightness | int))
+                                      ] | min
+                                    }}
+
+                              - delay:
+                                  milliseconds: "{{ step_delay_ms | int }}"
+
+            default:
+              - action: persistent_notification.create
+                data:
+                  notification_id: candeo_rd1pv2_secondary_light
+                  title: RD1-Pro Secondary Light Cannot Be Dimmed
+                  message: >-
+                    The selected secondary light does not appear to expose
+                    brightness control in Home Assistant.
+
+                    Choose a dimmable light entity for this blueprint.
+
+      # Release deliberately has no action sequence. The Release trigger starts
+      # a new automation run and restart mode immediately cancels the Hold loop.
+      - conditions:
+          - condition: trigger
+            id: released
+        sequence: []

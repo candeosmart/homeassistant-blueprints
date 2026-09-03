@@ -1,0 +1,271 @@
+blueprint:
+  name: Candeo C-ZB-RD1Pv2 - Unbind from Light or Zigbee Group in ZHA
+  description: >
+    **Remove a direct Zigbee binding from a Candeo RD1-Pro v2 using ZHA**
+
+    Remove an existing direct Zigbee binding between an RD1-Pro and either
+    an individual ZHA Zigbee device/light or a ZHA Zigbee group.
+
+    This blueprint creates a script for one predetermined binding partnership.
+
+
+    **V2 FIRMWARE REQUIRED**
+
+    Minimum supported RD1-Pro firmware:
+
+    - **Zigbee firmware: v2.0.0**
+
+    - **MCU firmware: v2.0.0**
+
+    A ZHA/device-handler version containing RD1-Pro v2 support is also required.
+
+
+    **ZHA Toolkit Required**
+
+    This blueprint uses ZHA Toolkit to manage the Zigbee binding table.
+    ZHA Toolkit must be installed and enabled in Home Assistant.
+
+
+    **What this removes:**
+
+    - On/Off binding (0x0006)
+
+    - Level Control / dimming binding (0x0008)
+
+    Only bindings from the RD1-Pro's dedicated direct-binding endpoint,
+    **endpoint 3**, to the selected target are removed.
+
+
+    **Important Notes:**
+
+    - The RD1-Pro must be running v2 firmware.
+
+    - The RD1-Pro should be in Remote Mode (REM) or Dual Purpose Mode (DPM).
+
+    - Other RD1-Pro bindings are left untouched.
+
+    - ZHA/coordinator bindings on other endpoints are not removed.
+
+    - For a ZHA group, enter its Zigbee Group ID, for example 0x1234.
+
+
+    **Version**: 2026.8
+
+    **Firmware Requirement**:
+    RD1-Pro v2 - Zigbee v2.0.0 / MCU v2.0.0 or later
+
+  domain: script
+
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    binding_section:
+      name: Binding Partnership
+      icon: mdi:link-variant-off
+      description: >
+        Select the RD1-Pro and the existing target binding to remove.
+      input:
+        rd1p_device:
+          name: Candeo RD1-Pro v2
+          description: >
+            Select the RD1-Pro running v2 firmware in REM or DPM mode.
+          selector:
+            device:
+              filter:
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-REM
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-DPM
+
+        binding_target:
+          name: Binding Target
+          description: >
+            Choose the ZHA device/light or Zigbee group that should be unbound.
+          selector:
+            choose:
+              choices:
+                ZHA Device / Light:
+                  selector:
+                    device:
+                      filter:
+                        - integration: zha
+
+                ZHA Zigbee Group:
+                  selector:
+                    text:
+
+    advanced_section:
+      name: Advanced
+      icon: mdi:cog
+      collapsed: true
+      input:
+        binding_tries:
+          name: Binding Attempts
+          description: >
+            Number of times ZHA Toolkit may retry Zigbee binding-table commands.
+          default: 3
+          selector:
+            number:
+              min: 1
+              max: 10
+              step: 1
+              mode: box
+
+    feedback_section:
+      name: Feedback
+      icon: mdi:message-check
+      collapsed: true
+      input:
+        show_notifications:
+          name: Show Result Notification
+          default: true
+          selector:
+            boolean:
+
+mode: single
+max_exceeded: silent
+
+variables:
+  rd1p_device: !input rd1p_device
+  binding_target: !input binding_target
+  binding_tries: !input binding_tries
+  show_notifications: !input show_notifications
+
+  rd1p_ieee: >-
+    {% set ns = namespace(value='') %}
+    {% set identifiers = device_attr(rd1p_device, 'identifiers') | default([], true) %}
+    {% for identifier in identifiers %}
+      {% if identifier[0] == 'zha' %}
+        {% set ns.value = identifier[1] %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.value }}
+
+  target_type: >-
+    {% if binding_target.active_choice == 'ZHA Device / Light' %}
+      device
+    {% elif binding_target.active_choice == 'ZHA Zigbee Group' %}
+      group
+    {% else %}
+      invalid
+    {% endif %}
+
+  target_device_id: >-
+    {% if binding_target.active_choice == 'ZHA Device / Light' %}
+      {{ binding_target['ZHA Device / Light'] }}
+    {% else %}
+      {{ '' }}
+    {% endif %}
+
+  target_ieee: >-
+    {% if binding_target.active_choice == 'ZHA Device / Light' %}
+      {% set ns = namespace(value='') %}
+      {% set identifiers = device_attr(binding_target['ZHA Device / Light'], 'identifiers') | default([], true) %}
+      {% for identifier in identifiers %}
+        {% if identifier[0] == 'zha' %}
+          {% set ns.value = identifier[1] %}
+        {% endif %}
+      {% endfor %}
+      {{ ns.value }}
+    {% else %}
+      {{ '' }}
+    {% endif %}
+
+  target_group_id: >-
+    {% if binding_target.active_choice == 'ZHA Zigbee Group' %}
+      {{ binding_target['ZHA Zigbee Group'] | default('', true) | string | trim }}
+    {% else %}
+      {{ '' }}
+    {% endif %}
+
+sequence:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                rd1p_ieee | trim | length == 0
+                or target_type == 'invalid'
+                or (target_type == 'device' and target_ieee | trim | length == 0)
+                or (target_type == 'group' and target_group_id | trim | length == 0)
+              }}
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ show_notifications }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  notification_id: candeo_rd1pv2_zha_unbinding
+                  title: RD1-Pro Unbinding - Missing Information
+                  message: >-
+                    The unbind operation could not start because the RD1-Pro
+                    or target information could not be resolved.
+          - stop: RD1-Pro and target details must be valid.
+            error: true
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ target_type == 'device' }}"
+        sequence:
+          - action: zha_toolkit.binds_remove_all
+            data:
+              ieee: "{{ rd1p_ieee | trim }}"
+              command_data: "{{ target_ieee | trim }}"
+              endpoint: 3
+              cluster:
+                - 6
+                - 8
+              tries: "{{ binding_tries | int }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ target_type == 'group' }}"
+        sequence:
+          - action: zha_toolkit.unbind_group
+            data:
+              ieee: "{{ rd1p_ieee | trim }}"
+              command_data: "{{ target_group_id | trim }}"
+              endpoint: 3
+              cluster: 6
+              tries: "{{ binding_tries | int }}"
+
+          - action: zha_toolkit.unbind_group
+            data:
+              ieee: "{{ rd1p_ieee | trim }}"
+              command_data: "{{ target_group_id | trim }}"
+              endpoint: 3
+              cluster: 8
+              tries: "{{ binding_tries | int }}"
+
+  - if:
+      - condition: template
+        value_template: "{{ show_notifications }}"
+    then:
+      - action: persistent_notification.create
+        data:
+          notification_id: candeo_rd1pv2_zha_unbinding
+          title: RD1-Pro Unbinding Request Complete
+          message: >-
+            The endpoint 3 unbinding commands have completed.
+
+            RD1-Pro:
+            {{ device_name(rd1p_device) }}
+
+            {% if target_type == 'device' %}
+            Target:
+            {{ device_name(target_device_id | trim) }}
+            {% else %}
+            Target:
+            ZHA Zigbee Group {{ target_group_id | trim }}
+            {% endif %}
+
+            Requested clusters:
+            On/Off (0x0006)
+            Level Control (0x0008)
+
+            You can verify the result in the RD1-Pro binding table in ZHA.

@@ -1,0 +1,320 @@
+blueprint:
+  name: Candeo C-ZB-RD1Pv2 - Direct-Binding Light / Group Selector in zigbee2mqtt
+  description: >
+    **Cycle an RD1-Pro v2 direct Zigbee binding between multiple targets**
+
+    Use double press to dynamically move the RD1-Pro's direct Zigbee
+    binding from one light/group to the next.
+
+    Normal single press and rotary dimming continue to travel directly
+    over Zigbee to whichever target is currently bound.
+
+
+    **How It Works:**
+
+    - 💡 Single press → directly controls the currently bound target
+    - 🎚️ Rotation → directly dims the currently bound target
+    - 🔁 Double press → unbinds the current target and binds the next one
+
+
+    ⚠️ **V2 FIRMWARE REQUIRED**
+
+    - Zigbee firmware v2.0.0
+    - MCU firmware v2.0.0 or later
+
+    A zigbee2mqtt version containing RD1-Pro v2 support is required.
+
+
+    **🛠️ Setup Required:**
+
+    Create an Input Select helper containing the exact zigbee2mqtt
+    Friendly Names of the targets in the order you want to cycle them.
+
+    Example:
+
+    - Kitchen Ceiling
+    - Kitchen Lamps
+    - Kitchen All
+
+    Targets may be individual Zigbee lights or Zigbee groups.
+
+    The helper's current value must match the RD1-Pro's current binding.
+
+    Use the Candeo **Bind to Light or Zigbee Group** script/blueprint
+    to create the initial binding before enabling this automation.
+
+
+    **Important Notes:**
+
+    - Direct binding uses RD1-Pro endpoint 3.
+    - On/Off and Level Control are moved together.
+    - The old target is fully unbound before the new target is bound.
+    - Target reporting is not disabled during the switch.
+    - If unbinding fails, the new binding is not created.
+    - The helper only advances after a successful new binding.
+
+
+    **Version**: 2026.8
+
+  domain: automation
+
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    device_section:
+      name: RD1-Pro
+      icon: mdi:knob
+      input:
+        remote_device:
+          name: Candeo RD1-Pro v2
+          description: >
+            Select the RD1-Pro running v2 firmware in REM or DPM mode.
+            Some zigbee2mqtt versions may display the non-v2 model identifier
+            even when v2 firmware is installed.
+          selector:
+            device:
+              filter:
+                - model_id: C-ZB-RD1P-REM
+                - model_id: C-ZB-RD1P-DPM
+                - model_id: C-ZB-RD1Pv2-REM
+                - model_id: C-ZB-RD1Pv2-DPM
+
+        rd1p_friendly_name:
+          name: RD1-Pro zigbee2mqtt Friendly Name
+          description: >
+            Exact Friendly Name of this RD1-Pro in zigbee2mqtt.
+          selector:
+            text:
+
+    selector_section:
+      name: Binding Targets
+      icon: mdi:format-list-bulleted
+      input:
+        target_selector:
+          name: Bound Target Helper
+          description: >
+            Input Select containing the exact zigbee2mqtt Friendly Names
+            of all lights/groups to cycle through.
+          selector:
+            entity:
+              filter:
+                - domain: input_select
+
+    mqtt_section:
+      name: Zigbee2MQTT
+      icon: mdi:access-point-network
+      collapsed: true
+      input:
+        mqtt_base_topic:
+          name: MQTT Base Topic
+          default: zigbee2mqtt
+          selector:
+            text:
+
+    feedback_section:
+      name: Feedback
+      icon: mdi:message-check
+      collapsed: true
+      input:
+        show_notifications:
+          name: Show Binding Change Notifications
+          default: false
+          selector:
+            boolean:
+
+mode: single
+max_exceeded: silent
+
+variables:
+  target_selector: !input target_selector
+  rd1p_friendly_name: !input rd1p_friendly_name
+  mqtt_base_topic: !input mqtt_base_topic
+  show_notifications: !input show_notifications
+
+triggers:
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: double_pressed
+    id: next_target
+
+condition: []
+
+action:
+  - variables:
+      current_target: "{{ states(target_selector) }}"
+      target_options: >
+        {{ state_attr(target_selector, 'options') | default([], true) }}
+
+  - variables:
+      next_target: >-
+        {% set options = state_attr(target_selector, 'options') or [] %}
+        {% set current = states(target_selector) %}
+        {% set ns = namespace(index=0) %}
+        {% for option in options %}
+          {% if option == current %}
+            {% set ns.index = loop.index0 %}
+          {% endif %}
+        {% endfor %}
+        {% if options | length > 1 and current in options %}
+          {{ options[(ns.index + 1) % (options | length)] }}
+        {% else %}
+          {{ '' }}
+        {% endif %}
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ target_options | length >= 2
+                 and current_target in target_options
+                 and next_target | length > 0 }}
+        sequence:
+          # --------------------------------------------------------
+          # Unbind current target
+          # --------------------------------------------------------
+          - variables:
+              unbind_transaction: >
+                {{ 'candeo_selector_unbind_' ~
+                   now().strftime('%Y%m%d%H%M%S%f') }}
+
+          - action: mqtt.publish
+            data:
+              topic: >
+                {{ mqtt_base_topic ~ '/bridge/request/device/unbind' }}
+              payload: >-
+                {{ {
+                  "from": rd1p_friendly_name,
+                  "from_endpoint": 3,
+                  "to": current_target,
+                  "clusters": ["genOnOff", "genLevelCtrl"],
+                  "skip_disable_reporting": true,
+                  "transaction": unbind_transaction
+                } | to_json }}
+
+          - wait_for_trigger:
+              - trigger: mqtt
+                topic: >
+                  {{ mqtt_base_topic ~
+                     '/bridge/response/device/unbind' }}
+                payload: "{{ unbind_transaction }}"
+                value_template: >
+                  {{ value_json.transaction | default('') }}
+            timeout: "00:00:30"
+            continue_on_timeout: true
+
+          - choose:
+              # Unbind succeeded
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{
+                        wait.completed
+                        and wait.trigger.payload_json.status == 'ok'
+                        and
+                        (wait.trigger.payload_json.data.failed
+                         | default([]) | length) == 0
+                      }}
+                sequence:
+                  # ------------------------------------------------
+                  # Bind next target
+                  # ------------------------------------------------
+                  - variables:
+                      bind_transaction: >
+                        {{ 'candeo_selector_bind_' ~
+                           now().strftime('%Y%m%d%H%M%S%f') }}
+
+                  - action: mqtt.publish
+                    data:
+                      topic: >
+                        {{ mqtt_base_topic ~
+                           '/bridge/request/device/bind' }}
+                      payload: >-
+                        {{ {
+                          "from": rd1p_friendly_name,
+                          "from_endpoint": 3,
+                          "to": next_target,
+                          "clusters": ["genOnOff", "genLevelCtrl"],
+                          "transaction": bind_transaction
+                        } | to_json }}
+
+                  - wait_for_trigger:
+                      - trigger: mqtt
+                        topic: >
+                          {{ mqtt_base_topic ~
+                             '/bridge/response/device/bind' }}
+                        payload: "{{ bind_transaction }}"
+                        value_template: >
+                          {{ value_json.transaction | default('') }}
+                    timeout: "00:00:30"
+                    continue_on_timeout: true
+
+                  - choose:
+                      # New binding succeeded
+                      - conditions:
+                          - condition: template
+                            value_template: >
+                              {{
+                                wait.completed
+                                and wait.trigger.payload_json.status == 'ok'
+                                and
+                                (wait.trigger.payload_json.data.failed
+                                 | default([]) | length) == 0
+                              }}
+                        sequence:
+                          - action: input_select.select_option
+                            target:
+                              entity_id: !input target_selector
+                            data:
+                              option: "{{ next_target }}"
+
+                          - if:
+                              - condition: template
+                                value_template: "{{ show_notifications }}"
+                            then:
+                              - action: persistent_notification.create
+                                data:
+                                  notification_id: candeo_rd1pv2_selector
+                                  title: RD1-Pro Binding Changed
+                                  message: >
+                                    {{ current_target }}
+                                    →
+
+                                    {{ next_target }}
+
+                                    Direct binding successfully moved to
+                                    the next target.
+
+                    default:
+                      - action: persistent_notification.create
+                        data:
+                          notification_id: candeo_rd1pv2_selector
+                          title: RD1-Pro New Binding Failed
+                          message: >
+                            {{ current_target }} was successfully unbound,
+                            but {{ next_target }} could not be fully bound.
+
+                            The helper has not been advanced.
+
+            default:
+              - action: persistent_notification.create
+                data:
+                  notification_id: candeo_rd1pv2_selector
+                  title: RD1-Pro Binding Change Cancelled
+                  message: >
+                    The existing binding to {{ current_target }}
+                    could not be completely removed.
+
+                    No new binding was created.
+
+    default:
+      - action: persistent_notification.create
+        data:
+          notification_id: candeo_rd1pv2_selector
+          title: RD1-Pro Binding Selector Needs Attention
+          message: >
+            The selected Input Select helper must contain at least
+            two valid zigbee2mqtt Friendly Names and its current state
+            must match one of those options.

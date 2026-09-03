@@ -1,0 +1,352 @@
+blueprint:
+  name: Candeo C-ZB-RD1P - Bind to Light or Zigbee Group in zigbee2mqtt
+  description: >
+    **Direct Zigbee binding for Candeo RD1-Pro using zigbee2mqtt**
+
+    Create a permanent direct Zigbee binding between an RD1-Pro and either
+    an individual Zigbee light or a Zigbee group.
+
+    ⚠️ **V2 FIRMWARE REQUIRED**
+
+    This blueprint requires an RD1-Pro running the new v2 firmware.
+
+    Minimum supported firmware:
+
+    - **Zigbee firmware: v2.0.0**
+    - **MCU firmware: v2.0.0**
+
+    Earlier RD1-Pro firmware does not support the binding functionality used
+    by this blueprint.
+
+    This blueprint creates a script for one predetermined binding partnership.
+    Choose the RD1-Pro and target when setting up the script, then simply run
+    the script whenever you want to create or restore that binding.
+
+
+    **What the binding controls:**
+
+    - 💡 **Single press**: Toggles the bound light or group
+
+    - 🎚️ **Rotary control**: Dims or brightens the bound light or group
+
+    - ⚡ Commands travel directly between Zigbee devices, without Home Assistant
+      needing to process each press or rotation
+
+
+    **RD1-Pro Modes:**
+
+    - **Remote Mode (REM)**:
+      The bound light or group can be directly controlled by the knob.
+
+    - **Dual Purpose Mode (DPM)**:
+      The RD1-Pro can control its wired load while also sending commands
+      to the bound Zigbee light or group.
+
+
+    **Important Notes:**
+
+    - ⚠️ **RD1-Pro v2 firmware is required.**
+
+    - Minimum firmware:
+      - Zigbee v2.0.0
+      - MCU v2.0.0
+
+    - The RD1-Pro must be in **Remote Mode (REM)** or
+      **Dual Purpose Mode (DPM)**.
+
+    - The RD1-Pro's dedicated binding endpoint is **endpoint 3**.
+      This is selected automatically by the blueprint.
+
+    - The blueprint binds:
+      - **On/Off** (`genOnOff`)
+      - **Level Control** (`genLevelCtrl`)
+
+    - Existing bindings are not removed.
+
+    - The target must support the relevant Zigbee clusters.
+      A non-dimmable target may support On/Off but not Level Control.
+
+    - Zigbee groups must already exist in zigbee2mqtt.
+
+    - Use the exact **zigbee2mqtt Friendly Name** for both the RD1-Pro
+      and target. These names may differ from their Home Assistant names.
+
+    - Depending on the zigbee2mqtt device definition, an RD1-Pro that has
+      been updated to v2 firmware may not necessarily display "v2" in its
+      friendly device/model name. Firmware version is what matters.
+
+
+    **🛠️ Setup:**
+
+    1. Confirm the RD1-Pro has been updated to **v2 firmware**.
+    2. Put the RD1-Pro into **REM** or **DPM** mode.
+    3. Find the RD1-Pro in zigbee2mqtt and note its Friendly Name.
+    4. Find the target light or Zigbee group and note its Friendly Name.
+    5. Enter both names below.
+    6. Create the script from this blueprint.
+    7. Run the script whenever you want to create or restore the binding.
+
+
+    **Verification:**
+
+    You can check the resulting binding in:
+
+    zigbee2mqtt → RD1-Pro → Bind
+
+
+    **Version**: 1.1
+
+    **Firmware Requirement**:
+    RD1-Pro v2 firmware — Zigbee v2.0.0 / MCU v2.0.0 or later
+
+    **Compatible Devices**:
+    Candeo RD1-Pro running v2 firmware in REM or DPM mode
+
+  domain: script
+
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    binding_section:
+      name: Binding Partnership
+      icon: mdi:link-variant
+      description: >
+        Choose the v2 firmware RD1-Pro and the light or Zigbee group
+        it should control.
+      input:
+        rd1p_friendly_name:
+          name: RD1-Pro Friendly Name
+          description: >
+            Enter the exact Friendly Name of the RD1-Pro as shown in
+            zigbee2mqtt. The RD1-Pro must be running v2 firmware.
+          selector:
+            text:
+
+        target_friendly_name:
+          name: Target Light or Group Friendly Name
+          description: >
+            Enter the exact zigbee2mqtt Friendly Name of the individual
+            Zigbee light or Zigbee group you want the RD1-Pro to control.
+          selector:
+            text:
+
+    mqtt_section:
+      name: Zigbee2MQTT
+      icon: mdi:access-point-network
+      description: >
+        Advanced zigbee2mqtt settings. Most users should leave these unchanged.
+      collapsed: true
+      input:
+        mqtt_base_topic:
+          name: MQTT Base Topic
+          description: >
+            The MQTT base topic used by zigbee2mqtt.
+          default: "zigbee2mqtt"
+          selector:
+            text:
+
+    feedback_section:
+      name: Feedback
+      icon: mdi:message-check
+      description: >
+        Configure feedback after the binding request.
+      collapsed: true
+      input:
+        show_notifications:
+          name: Show Result Notification
+          description: >
+            Show a Home Assistant notification confirming whether the
+            binding succeeded or failed.
+          default: true
+          selector:
+            boolean:
+
+mode: single
+max_exceeded: silent
+
+variables:
+  rd1p_friendly_name: !input rd1p_friendly_name
+  target_friendly_name: !input target_friendly_name
+  mqtt_base_topic: !input mqtt_base_topic
+  show_notifications: !input show_notifications
+
+sequence:
+  # Prepare request details
+  - variables:
+      transaction: >
+        {{ 'candeo_bind_' ~ now().strftime('%Y%m%d%H%M%S%f') }}
+      request_topic: >
+        {{ mqtt_base_topic ~ '/bridge/request/device/bind' }}
+      response_topic: >
+        {{ mqtt_base_topic ~ '/bridge/response/device/bind' }}
+
+  # Send binding request
+  - action: mqtt.publish
+    data:
+      topic: "{{ request_topic }}"
+      qos: 0
+      retain: false
+      payload: >-
+        {{ {
+          "from": rd1p_friendly_name,
+          "from_endpoint": 3,
+          "to": target_friendly_name,
+          "clusters": [
+            "genOnOff",
+            "genLevelCtrl"
+          ],
+          "transaction": transaction
+        } | to_json }}
+
+  # Wait for the matching zigbee2mqtt response
+  - wait_for_trigger:
+      - trigger: mqtt
+        topic: "{{ response_topic }}"
+        payload: "{{ transaction }}"
+        value_template: >
+          {{ value_json.transaction | default('') }}
+    timeout: "00:00:30"
+    continue_on_timeout: true
+
+  # Process the result
+  - choose:
+      # No response
+      - conditions:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ show_notifications }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  notification_id: "candeo_rd1p_binding"
+                  title: "RD1-Pro Binding – No Response"
+                  message: >
+                    No response was received from zigbee2mqtt within 30 seconds.
+
+                    RD1-Pro:
+                    {{ rd1p_friendly_name }}
+
+                    Target:
+                    {{ target_friendly_name }}
+
+                    The request may still have completed.
+
+                    Check the RD1-Pro's Bind page in zigbee2mqtt.
+
+                    This function requires RD1-Pro v2 firmware
+                    (Zigbee v2.0.0 / MCU v2.0.0 or later).
+
+      # Complete success
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                wait.trigger.payload_json.status == 'ok'
+                and
+                (
+                  wait.trigger.payload_json.data.failed
+                  | default([])
+                  | length
+                ) == 0
+              }}
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ show_notifications }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  notification_id: "candeo_rd1p_binding"
+                  title: "RD1-Pro Binding Complete"
+                  message: >
+                    {% set result = wait.trigger.payload_json.data %}
+
+                    Binding created successfully.
+
+                    RD1-Pro:
+                    {{ rd1p_friendly_name }}
+
+                    Target:
+                    {{ target_friendly_name }}
+
+                    Bound clusters:
+                    {{ result.clusters | default([]) | join(', ') }}
+
+                    The RD1-Pro should now directly control the target using
+                    single press and rotary dimming.
+
+      # Partial success
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                wait.trigger.payload_json.status == 'ok'
+                and
+                (
+                  wait.trigger.payload_json.data.failed
+                  | default([])
+                  | length
+                ) > 0
+              }}
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ show_notifications }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  notification_id: "candeo_rd1p_binding"
+                  title: "RD1-Pro Binding Partially Complete"
+                  message: >
+                    {% set result = wait.trigger.payload_json.data %}
+
+                    The binding request completed, but one or more clusters
+                    could not be bound.
+
+                    RD1-Pro:
+                    {{ rd1p_friendly_name }}
+
+                    Target:
+                    {{ target_friendly_name }}
+
+                    Bound clusters:
+                    {{ result.clusters | default([]) | join(', ') }}
+
+                    Failed clusters:
+                    {{ result.failed | default([]) | join(', ') }}
+
+                    The target may not support all RD1-Pro binding functions.
+
+    # Error response
+    default:
+      - if:
+          - condition: template
+            value_template: "{{ show_notifications }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: "candeo_rd1p_binding"
+              title: "RD1-Pro Binding Failed"
+              message: >
+                zigbee2mqtt reported that the binding could not be created.
+
+                RD1-Pro:
+                {{ rd1p_friendly_name }}
+
+                Target:
+                {{ target_friendly_name }}
+
+                Error:
+                {{ wait.trigger.payload_json.error | default('Unknown error') }}
+
+                Check that:
+
+                - The RD1-Pro is running v2 firmware
+                  (Zigbee v2.0.0 / MCU v2.0.0 or later)
+                - The RD1-Pro is in REM or DPM mode
+                - Both devices are online
+                - The target supports Zigbee On/Off and Level Control binding

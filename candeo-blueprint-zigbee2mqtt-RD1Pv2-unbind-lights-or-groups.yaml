@@ -1,0 +1,234 @@
+blueprint:
+  name: Candeo C-ZB-RD1Pv2 - Unbind from Light or Zigbee Group in zigbee2mqtt
+  description: >
+    **Remove a direct Zigbee binding from a Candeo RD1-Pro v2 using zigbee2mqtt**
+
+    Remove an existing direct Zigbee binding between an RD1-Pro and an
+    individual Zigbee light or Zigbee group.
+
+    This blueprint creates a script for one predetermined binding partnership.
+
+
+    ⚠️ **V2 FIRMWARE REQUIRED**
+
+    Minimum supported RD1-Pro firmware:
+
+    - **Zigbee firmware: v2.0.0**
+    - **MCU firmware: v2.0.0**
+
+    A zigbee2mqtt version containing RD1-Pro v2 support is also required.
+
+
+    **What this removes:**
+
+    - 💡 On/Off binding
+    - 🎚️ Level Control / dimming binding
+
+    The RD1-Pro's dedicated direct-binding endpoint is **endpoint 3**.
+
+
+    **Important Notes:**
+
+    - The RD1-Pro must be running v2 firmware.
+    - The target must match the light/group that was previously bound.
+    - Existing zigbee2mqtt coordinator bindings are not removed.
+    - Reporting configuration on the target is left untouched.
+    - Use exact zigbee2mqtt Friendly Names.
+
+
+    **How to Use:**
+
+    1. Select the RD1-Pro / target partnership below.
+    2. Create the script.
+    3. Run it whenever you want to remove that binding.
+
+
+    **Version**: 2026.8
+
+    **Firmware Requirement**:
+    RD1-Pro v2 — Zigbee v2.0.0 / MCU v2.0.0 or later
+
+  domain: script
+
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    binding_section:
+      name: Binding Partnership
+      icon: mdi:link-variant-off
+      description: >
+        Select the existing RD1-Pro binding partnership to remove.
+      input:
+        rd1p_friendly_name:
+          name: RD1-Pro Friendly Name
+          description: >
+            Exact Friendly Name of the RD1-Pro in zigbee2mqtt.
+            The RD1-Pro must be running v2 firmware.
+          selector:
+            text:
+
+        target_friendly_name:
+          name: Target Light or Group Friendly Name
+          description: >
+            Exact zigbee2mqtt Friendly Name of the bound light
+            or Zigbee group.
+          selector:
+            text:
+
+    mqtt_section:
+      name: Zigbee2MQTT
+      icon: mdi:access-point-network
+      collapsed: true
+      input:
+        mqtt_base_topic:
+          name: MQTT Base Topic
+          default: "zigbee2mqtt"
+          selector:
+            text:
+
+    feedback_section:
+      name: Feedback
+      icon: mdi:message-check
+      collapsed: true
+      input:
+        show_notifications:
+          name: Show Result Notification
+          default: true
+          selector:
+            boolean:
+
+mode: single
+max_exceeded: silent
+
+variables:
+  rd1p_friendly_name: !input rd1p_friendly_name
+  target_friendly_name: !input target_friendly_name
+  mqtt_base_topic: !input mqtt_base_topic
+  show_notifications: !input show_notifications
+
+sequence:
+  - variables:
+      transaction: >
+        {{ 'candeo_unbind_' ~ now().strftime('%Y%m%d%H%M%S%f') }}
+      request_topic: >
+        {{ mqtt_base_topic ~ '/bridge/request/device/unbind' }}
+      response_topic: >
+        {{ mqtt_base_topic ~ '/bridge/response/device/unbind' }}
+
+  - action: mqtt.publish
+    data:
+      topic: "{{ request_topic }}"
+      qos: 0
+      retain: false
+      payload: >-
+        {{ {
+          "from": rd1p_friendly_name,
+          "from_endpoint": 3,
+          "to": target_friendly_name,
+          "clusters": [
+            "genOnOff",
+            "genLevelCtrl"
+          ],
+          "skip_disable_reporting": true,
+          "transaction": transaction
+        } | to_json }}
+
+  - wait_for_trigger:
+      - trigger: mqtt
+        topic: "{{ response_topic }}"
+        payload: "{{ transaction }}"
+        value_template: >
+          {{ value_json.transaction | default('') }}
+    timeout: "00:00:30"
+    continue_on_timeout: true
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ show_notifications }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  notification_id: candeo_rd1pv2_unbinding
+                  title: RD1-Pro Unbinding – No Response
+                  message: >
+                    No response was received from zigbee2mqtt.
+
+                    RD1-Pro: {{ rd1p_friendly_name }}
+
+                    Target: {{ target_friendly_name }}
+
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                wait.trigger.payload_json.status == 'ok'
+                and
+                (wait.trigger.payload_json.data.failed
+                 | default([]) | length) == 0
+              }}
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ show_notifications }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  notification_id: candeo_rd1pv2_unbinding
+                  title: RD1-Pro Unbinding Complete
+                  message: >
+                    Direct binding removed successfully.
+
+                    RD1-Pro: {{ rd1p_friendly_name }}
+
+                    Target: {{ target_friendly_name }}
+
+                    On/Off and Level Control have been unbound.
+
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                wait.trigger.payload_json.status == 'ok'
+                and
+                (wait.trigger.payload_json.data.failed
+                 | default([]) | length) > 0
+              }}
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ show_notifications }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  notification_id: candeo_rd1pv2_unbinding
+                  title: RD1-Pro Unbinding Partially Complete
+                  message: >
+                    The request completed, but some clusters could not
+                    be unbound.
+
+                    RD1-Pro: {{ rd1p_friendly_name }}
+
+                    Target: {{ target_friendly_name }}
+
+                    Failed:
+                    {{ wait.trigger.payload_json.data.failed
+                       | default([]) | join(', ') }}
+
+    default:
+      - if:
+          - condition: template
+            value_template: "{{ show_notifications }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: candeo_rd1pv2_unbinding
+              title: RD1-Pro Unbinding Failed
+              message: >
+                {{ wait.trigger.payload_json.error
+                   | default('Unknown zigbee2mqtt error') }}

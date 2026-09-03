@@ -1,0 +1,306 @@
+blueprint:
+  name: Candeo C-ZB-RD1Pv2 - Direct-Binding Light / Group Selector in ZHA
+  description: >
+    **Cycle an RD1-Pro v2 direct Zigbee binding between multiple ZHA targets**
+
+    Use double press to move the RD1-Pro's endpoint 3 direct binding to the
+    next target in an Input Select helper.
+
+    Normal single press and rotary dimming continue to travel directly over
+    Zigbee to whichever target is currently bound.
+
+
+    **How It Works:**
+
+    - Single press -> directly controls the currently bound target
+
+    - Rotary control -> directly dims the currently bound target
+
+    - Double press -> clears endpoint 3 On/Off + Level bindings, binds the
+      next target, then advances the helper
+
+
+    **V2 FIRMWARE REQUIRED**
+
+    - Zigbee firmware v2.0.0
+
+    - MCU firmware v2.0.0 or later
+
+    A ZHA/device-handler version containing RD1-Pro v2 support is also required.
+
+
+    **ZHA Toolkit Required**
+
+    This blueprint uses ZHA Toolkit for direct binding management.
+
+
+    **Setup Required:**
+
+    Create an Input Select helper containing target definitions in this format:
+
+    - device|light.kitchen_ceiling
+
+    - device|00:11:22:33:44:55:66:77
+
+    - group|0x1234
+
+    For a device target, use a ZHA entity ID or IEEE address.
+    For a group target, use the Zigbee Group ID.
+
+    The text before the | character tells the blueprint which ZHA binding
+    method to use. The helper may contain any number of valid targets.
+
+
+    **Important Notes:**
+
+    - Direct binding uses endpoint 3.
+
+    - Only On/Off (0x0006) and Level Control (0x0008) are managed.
+
+    - Before each switch, those endpoint 3 bindings are cleared. This prevents
+      stale or multiple direct-binding targets even if the helper was previously
+      out of sync.
+
+    - Bindings on other RD1-Pro endpoints are preserved.
+
+    - The helper advances only after the ZHA Toolkit binding actions complete.
+
+
+    **Version**: 2026.8
+
+    **Firmware Requirement**:
+    RD1-Pro v2 - Zigbee v2.0.0 / MCU v2.0.0 or later
+
+  domain: automation
+
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    device_section:
+      name: RD1-Pro v2
+      icon: mdi:knob
+      input:
+        remote_device:
+          name: Candeo RD1-Pro v2
+          description: >
+            Select the RD1-Pro running v2 firmware in REM or DPM mode.
+          selector:
+            device:
+              filter:
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-REM
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-DPM
+
+    selector_section:
+      name: Binding Targets
+      icon: mdi:format-list-bulleted
+      input:
+        target_selector:
+          name: Bound Target Helper
+          description: >
+            Input Select containing entries such as device|light.kitchen
+            or group|0x1234.
+          selector:
+            entity:
+              filter:
+                - domain: input_select
+
+    advanced_section:
+      name: Advanced
+      icon: mdi:cog
+      collapsed: true
+      input:
+        binding_tries:
+          name: Binding Attempts
+          default: 3
+          selector:
+            number:
+              min: 1
+              max: 10
+              step: 1
+              mode: box
+
+    feedback_section:
+      name: Feedback
+      icon: mdi:message-check
+      collapsed: true
+      input:
+        show_notifications:
+          name: Show Binding Change Notifications
+          default: false
+          selector:
+            boolean:
+
+mode: single
+max_exceeded: silent
+
+variables:
+  remote_device: !input remote_device
+  target_selector: !input target_selector
+  binding_tries: !input binding_tries
+  show_notifications: !input show_notifications
+
+  rd1p_ieee: >-
+    {% set ns = namespace(value='') %}
+    {% set identifiers = device_attr(remote_device, 'identifiers') | default([], true) %}
+    {% for identifier in identifiers %}
+      {% if identifier[0] == 'zha' %}
+        {% set ns.value = identifier[1] %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.value }}
+
+triggers:
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_double_press
+    subtype: rotary_knob
+    id: next_target
+
+condition: []
+
+action:
+  - variables:
+      current_entry: "{{ states(target_selector) }}"
+      target_options: >-
+        {{ state_attr(target_selector, 'options') | default([], true) }}
+
+  - variables:
+      next_entry: >-
+        {% set options = state_attr(target_selector, 'options') or [] %}
+        {% set current = states(target_selector) %}
+        {% set ns = namespace(index=-1) %}
+        {% for option in options %}
+          {% if option == current %}
+            {% set ns.index = loop.index0 %}
+          {% endif %}
+        {% endfor %}
+        {% if options | length >= 2 and ns.index >= 0 %}
+          {{ options[(ns.index + 1) % (options | length)] }}
+        {% else %}
+          {{ '' }}
+        {% endif %}
+
+  - variables:
+      next_type: >-
+        {% if '|' in next_entry %}
+          {{ next_entry.split('|', 1)[0] | trim | lower }}
+        {% else %}
+          {{ '' }}
+        {% endif %}
+      next_reference: >-
+        {% if '|' in next_entry %}
+          {{ next_entry.split('|', 1)[1] | trim }}
+        {% else %}
+          {{ '' }}
+        {% endif %}
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                rd1p_ieee | trim | length == 0
+                or target_options | length < 2
+                or next_entry | trim | length == 0
+                or next_type not in ['device', 'group']
+                or next_reference | trim | length == 0
+              }}
+        sequence:
+          - action: persistent_notification.create
+            data:
+              notification_id: candeo_rd1pv2_zha_selector
+              title: RD1-Pro Binding Selector Needs Attention
+              message: >-
+                The selector could not determine a valid next target.
+
+                Helper entries must use one of these formats:
+
+                device|light.example
+
+                device|00:11:22:33:44:55:66:77
+
+                group|0x1234
+          - stop: Invalid direct-binding selector configuration.
+            error: true
+
+  - action: zha_toolkit.binds_remove_all
+    data:
+      ieee: "{{ rd1p_ieee | trim }}"
+      endpoint: 3
+      cluster:
+        - 6
+        - 8
+      tries: "{{ binding_tries | int }}"
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ next_type == 'device' }}"
+        sequence:
+          - action: zha_toolkit.bind_ieee
+            data:
+              ieee: "{{ rd1p_ieee | trim }}"
+              command_data: "{{ next_reference | trim }}"
+              endpoint: 3
+              cluster: 6
+              tries: "{{ binding_tries | int }}"
+
+          - action: zha_toolkit.bind_ieee
+            data:
+              ieee: "{{ rd1p_ieee | trim }}"
+              command_data: "{{ next_reference | trim }}"
+              endpoint: 3
+              cluster: 8
+              tries: "{{ binding_tries | int }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ next_type == 'group' }}"
+        sequence:
+          - action: zha_toolkit.bind_group
+            data:
+              ieee: "{{ rd1p_ieee | trim }}"
+              command_data: "{{ next_reference | trim }}"
+              endpoint: 3
+              cluster: 6
+              tries: "{{ binding_tries | int }}"
+
+          - action: zha_toolkit.bind_group
+            data:
+              ieee: "{{ rd1p_ieee | trim }}"
+              command_data: "{{ next_reference | trim }}"
+              endpoint: 3
+              cluster: 8
+              tries: "{{ binding_tries | int }}"
+
+  - action: input_select.select_option
+    target:
+      entity_id: !input target_selector
+    data:
+      option: "{{ next_entry }}"
+
+  - if:
+      - condition: template
+        value_template: "{{ show_notifications }}"
+    then:
+      - action: persistent_notification.create
+        data:
+          notification_id: candeo_rd1pv2_zha_selector
+          title: RD1-Pro Binding Changed
+          message: >-
+            Direct-binding switch completed.
+
+            Previous helper target:
+            {{ current_entry }}
+
+            New helper target:
+            {{ next_entry }}
+
+            The RD1-Pro should now directly control the new target using
+            single press and rotary dimming.

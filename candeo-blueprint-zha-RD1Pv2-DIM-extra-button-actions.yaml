@@ -1,0 +1,166 @@
+blueprint:
+  name: Candeo C-ZB-RD1Pv2 (DIM mode) - Extra Button Actions in ZHA
+  description: >
+    **Extra button actions for Candeo RD1-Pro v2 in DIM Mode using ZHA**
+
+    Keep the RD1-Pro operating normally as a wired rotary dimmer while using
+    its additional v2 button commands for Home Assistant automations.
+
+
+    **Local wired-light control remains unchanged:**
+
+    - 💡 **Single press**: Controls the wired light locally
+
+    - 🎚️ **Rotary control**: Dims or brightens the wired light locally
+
+
+    **Extra Home Assistant actions:**
+
+    - 👆👆 **Double press**: Runs your chosen action sequence
+
+    - ✋ **Hold**: Runs your chosen action sequence
+
+    - 👋 **Release**: Runs your chosen action sequence
+
+
+    ⚠️ **V2 FIRMWARE REQUIRED**
+
+    Minimum supported RD1-Pro firmware:
+
+    - **Zigbee firmware: v2.0.0**
+
+    - **MCU firmware: v2.0.0**
+
+    A ZHA/device-handler version containing RD1-Pro v2 support is also required.
+
+
+    **Extra Button Commands must be enabled:**
+
+    Open the RD1-Pro device in Home Assistant and set
+    **Extra button commands** to **Enabled**.
+
+    When Extra Button Commands are enabled, the RD1-Pro waits approximately
+    0.5 seconds before processing a normal single press so that it can detect
+    whether a double press is being performed. Disable Extra Button Commands
+    when these additional actions are not required to retain immediate
+    single-press response.
+
+
+    **Important Notes:**
+
+    - This blueprint is specifically for **DIM Mode**.
+
+    - The wired light continues to be controlled directly by the RD1-Pro.
+
+    - Home Assistant does not handle the normal single press or rotary control.
+
+    - Hold and Release are separate events, allowing actions such as
+      "start while held / stop on release".
+
+
+    **Version**: 2026.8
+
+    **Firmware Requirement**:
+    RD1-Pro v2 - Zigbee v2.0.0 / MCU v2.0.0 or later
+
+    **Compatible Device**:
+    Candeo C-ZB-RD1Pv2-DIM
+
+  domain: automation
+
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    device_section:
+      name: RD1-Pro v2
+      icon: mdi:knob
+      description: >
+        Select the RD1-Pro v2 operating in DIM Mode.
+      input:
+        remote_device:
+          name: Candeo RD1-Pro v2 (DIM Mode)
+          description: >
+            Select the RD1-Pro running v2 firmware in DIM Mode.
+            Extra Button Commands must be enabled on the ZHA device.
+          selector:
+            device:
+              filter:
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-DIM
+
+    actions_section:
+      name: Extra Button Actions
+      icon: mdi:gesture-double-tap
+      description: >
+        Choose what Home Assistant should do for each additional button command.
+      input:
+        on_double_press:
+          name: Double Press - Actions
+          description: >
+            Actions to run when the RD1-Pro knob is double pressed.
+          default: []
+          selector:
+            action: {}
+
+        on_hold:
+          name: Hold - Actions
+          description: >
+            Actions to run when the RD1-Pro knob is held.
+          default: []
+          selector:
+            action: {}
+
+        on_release:
+          name: Release - Actions
+          description: >
+            Actions to run when the RD1-Pro knob is released after a hold.
+          default: []
+          selector:
+            action: {}
+
+mode: parallel
+max: 10
+max_exceeded: silent
+
+triggers:
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_double_press
+    subtype: rotary_knob
+    id: double_pressed
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_long_press
+    subtype: rotary_knob
+    id: held
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_long_release
+    subtype: rotary_knob
+    id: released
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: double_pressed
+        sequence: !input on_double_press
+
+      - conditions:
+          - condition: trigger
+            id: held
+        sequence: !input on_hold
+
+      - conditions:
+          - condition: trigger
+            id: released
+        sequence: !input on_release

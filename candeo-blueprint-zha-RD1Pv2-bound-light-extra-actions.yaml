@@ -1,0 +1,163 @@
+blueprint:
+  name: Candeo C-ZB-RD1Pv2 - Bound Light + Extra Actions in ZHA
+  description: >
+    **Combine direct Zigbee light control with Home Assistant actions**
+
+    Use an RD1-Pro v2 in Remote Mode or Dual Purpose Mode with an existing
+    direct Zigbee binding while assigning additional Home Assistant actions
+    to double press, hold and release.
+
+
+    **Direct Zigbee Control:**
+
+    - Single press -> toggles the bound light/group directly
+
+    - Rotary control -> dims the bound light/group directly
+
+    These commands travel directly over Zigbee and do not depend on Home
+    Assistant processing each press or rotation.
+
+
+    **Home Assistant Extra Actions:**
+
+    - Double press -> custom action sequence
+
+    - Hold -> custom action sequence
+
+    - Release -> custom action sequence
+
+
+    **V2 FIRMWARE REQUIRED**
+
+    Minimum RD1-Pro firmware:
+
+    - Zigbee firmware v2.0.0
+
+    - MCU firmware v2.0.0 or later
+
+    A ZHA/device-handler version containing RD1-Pro v2 support is also required.
+
+
+    **Setup Required:**
+
+    First create the direct Zigbee binding using the Candeo
+    **RD1-Pro - Bind to Light or Zigbee Group** ZHA blueprint or script.
+
+    Then use this blueprint to assign the extra Home Assistant actions.
+
+
+    **Important Notes:**
+
+    - The RD1-Pro must be in REM or DPM mode.
+
+    - This blueprint does not create or modify the direct binding.
+
+    - Single press and rotary events are intentionally not handled here.
+
+    - Double press, hold and release remain available to Home Assistant.
+
+    - Hold and Release run independently, making this suitable for patterns
+      such as start-on-hold / stop-on-release.
+
+
+    **Version**: 2026.8
+
+    **Firmware Requirement**:
+    RD1-Pro v2 - Zigbee v2.0.0 / MCU v2.0.0 or later
+
+    **Compatible Devices**:
+    Candeo C-ZB-RD1Pv2-REM and C-ZB-RD1Pv2-DPM
+
+  domain: automation
+
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    device_section:
+      name: RD1-Pro v2
+      icon: mdi:knob
+      input:
+        remote_device:
+          name: Candeo RD1-Pro v2
+          description: >
+            Select the RD1-Pro v2 with an existing direct binding.
+          selector:
+            device:
+              filter:
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-REM
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-DPM
+
+    actions_section:
+      name: Extra Actions
+      icon: mdi:gesture-double-tap
+      input:
+        on_double_press:
+          name: Double Press - Actions
+          description: Actions to run when the knob is double pressed.
+          default: []
+          selector:
+            action: {}
+
+        on_hold:
+          name: Hold - Actions
+          description: Actions to run when the knob is held.
+          default: []
+          selector:
+            action: {}
+
+        on_release:
+          name: Release - Actions
+          description: Actions to run when the knob is released after a hold.
+          default: []
+          selector:
+            action: {}
+
+mode: parallel
+max: 10
+max_exceeded: silent
+
+triggers:
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_double_press
+    subtype: rotary_knob
+    id: double_pressed
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_long_press
+    subtype: rotary_knob
+    id: held
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_long_release
+    subtype: rotary_knob
+    id: released
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: double_pressed
+        sequence: !input on_double_press
+
+      - conditions:
+          - condition: trigger
+            id: held
+        sequence: !input on_hold
+
+      - conditions:
+          - condition: trigger
+            id: released
+        sequence: !input on_release

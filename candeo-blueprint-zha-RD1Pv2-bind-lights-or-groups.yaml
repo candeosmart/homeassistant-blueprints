@@ -1,0 +1,361 @@
+blueprint:
+  name: Candeo C-ZB-RD1Pv2 - Bind to Light or Zigbee Group in ZHA
+  description: >
+    **Direct Zigbee binding for Candeo RD1-Pro v2 using ZHA**
+
+    Create a permanent direct Zigbee binding between an RD1-Pro and either
+    an individual Zigbee light/device or a ZHA Zigbee group.
+
+    This blueprint creates a script for one predetermined binding partnership.
+    Choose the RD1-Pro and target when setting up the script, then simply run
+    the script whenever you want to create or restore that binding.
+
+
+    ⚠️ **V2 FIRMWARE REQUIRED**
+
+    This blueprint requires an RD1-Pro running the new v2 firmware.
+
+    Minimum supported firmware:
+
+    - **Zigbee firmware: v2.0.0**
+    - **MCU firmware: v2.0.0**
+
+    Earlier RD1-Pro firmware does not support the binding functionality
+    used by this blueprint.
+
+
+    **ZHA Toolkit Required**
+
+    This blueprint uses ZHA Toolkit to perform the Zigbee binding.
+
+    Requirements:
+
+    - ZHA integration
+    - ZHA Toolkit v1.2.0 or later
+    - ZHA Toolkit enabled in Home Assistant
+
+
+    **What the binding controls:**
+
+    - 💡 **Single press**: Toggles the bound light or group
+
+    - 🎚️ **Rotary control**: Dims or brightens the bound light or group
+
+    - ⚡ Commands travel directly between Zigbee devices without Home Assistant
+      needing to process each press or rotation
+
+
+    **RD1-Pro Modes:**
+
+    - **Remote Mode (REM)**:
+      The bound light or group can be directly controlled by the knob.
+
+    - **Dual Purpose Mode (DPM)**:
+      The RD1-Pro can control its wired load while also sending commands
+      to the bound Zigbee light or group.
+
+
+    **Important Notes:**
+
+    - ⚠️ **RD1-Pro v2 firmware is required.**
+
+    - Minimum firmware:
+      - Zigbee v2.0.0
+      - MCU v2.0.0
+
+    - The RD1-Pro must be in **Remote Mode (REM)** or
+      **Dual Purpose Mode (DPM)**.
+
+    - The RD1-Pro's dedicated binding endpoint is **endpoint 3**.
+      This is selected automatically.
+
+    - The blueprint binds:
+      - **On/Off** (`0x0006`)
+      - **Level Control** (`0x0008`)
+
+    - Existing bindings are not removed.
+
+    - The target must support the appropriate Zigbee clusters.
+      A non-dimmable target may support On/Off but not Level Control.
+
+    - ZHA groups must already exist before they can be bound.
+
+    - When binding to a ZHA group, enter its Zigbee Group ID rather
+      than its Home Assistant entity name.
+
+    - When binding directly to a device, ZHA Toolkit automatically chooses
+      the first compatible destination endpoint.
+
+
+    **🛠️ Setup:**
+
+    1. Confirm the RD1-Pro has been updated to **v2 firmware**.
+    2. Confirm ZHA Toolkit v1.2.0 or later is installed and enabled.
+    3. Put the RD1-Pro into **REM** or **DPM** mode.
+    4. Select the RD1-Pro below.
+    5. Choose either:
+       - A ZHA Zigbee device/light
+       - A ZHA Zigbee group
+    6. Create the script from this blueprint.
+    7. Run the script whenever you want to create or restore the binding.
+
+
+    **Verification:**
+
+    You can verify the resulting binding in:
+
+    Settings → Zigbee → Devices → RD1-Pro →
+    Manage Zigbee Device → Bindings
+
+
+    **Version**: 2026.8
+
+    **Firmware Requirement**:
+    RD1-Pro v2 firmware — Zigbee v2.0.0 / MCU v2.0.0 or later
+
+    **Additional Requirement**:
+    ZHA Toolkit v1.2.0 or later
+
+    **Compatible Devices**:
+    Candeo C-ZB-RD1Pv2-REM
+    Candeo C-ZB-RD1Pv2-DPM
+
+  domain: script
+
+  homeassistant:
+    min_version: 2026.8.0
+
+  input:
+    binding_section:
+      name: Binding Partnership
+      icon: mdi:link-variant
+      description: >
+        Select the RD1-Pro v2 and the Zigbee device or group it should control.
+      input:
+        rd1p_device:
+          name: Candeo RD1-Pro v2
+          description: >
+            Select the RD1-Pro running v2 firmware.
+            The device must be in Remote Mode (REM) or Dual Purpose Mode (DPM).
+          selector:
+            device:
+              filter:
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-REM
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-DPM
+
+        binding_target:
+          name: Binding Target
+          description: >
+            Choose whether to bind directly to a Zigbee device/light
+            or to an existing ZHA Zigbee group.
+          selector:
+            choose:
+              choices:
+                Zigbee Device / Light:
+                  selector:
+                    device:
+                      filter:
+                        - integration: zha
+
+                ZHA Zigbee Group:
+                  selector:
+                    text:
+                      type: text
+
+
+    advanced_section:
+      name: Advanced
+      icon: mdi:cog
+      description: >
+        Advanced binding options. Most users should leave these unchanged.
+      collapsed: true
+      input:
+        binding_tries:
+          name: Binding Attempts
+          description: >
+            Number of times ZHA Toolkit may attempt each Zigbee binding command.
+            RD1-Pro is mains powered, so the default should normally be sufficient.
+          default: 3
+          selector:
+            number:
+              min: 1
+              max: 10
+              step: 1
+              mode: box
+
+    feedback_section:
+      name: Feedback
+      icon: mdi:message-check
+      description: >
+        Configure feedback after the binding request has completed.
+      collapsed: true
+      input:
+        show_notifications:
+          name: Show Result Notification
+          description: >
+            Show a Home Assistant notification after the binding commands
+            have been sent.
+          default: true
+          selector:
+            boolean:
+
+mode: single
+max_exceeded: silent
+
+variables:
+  rd1p_device: !input rd1p_device
+  binding_target: !input binding_target
+  binding_tries: !input binding_tries
+  show_notifications: !input show_notifications
+
+  # Extract the ZHA IEEE address from the selected RD1-Pro device.
+  rd1p_ieee: >-
+    {% set ns = namespace(ieee='') %}
+    {% set identifiers = device_attr(rd1p_device, 'identifiers') | default([], true) %}
+    {% for identifier in identifiers %}
+      {% if identifier[0] == 'zha' %}
+        {% set ns.ieee = identifier[1] %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.ieee }}
+
+  target_type: >-
+    {% if binding_target.active_choice == 'Zigbee Device / Light' %}
+      device
+    {% else %}
+      group
+    {% endif %}
+
+  target_device_id: >-
+    {% if binding_target.active_choice == 'Zigbee Device / Light' %}
+      {{ binding_target['Zigbee Device / Light'] }}
+    {% else %}
+      {{ '' }}
+    {% endif %}
+
+  # Extract the target ZHA IEEE when a device is selected.
+  target_ieee: >-
+    {% if binding_target.active_choice == 'Zigbee Device / Light' %}
+      {% set ns = namespace(ieee='') %}
+      {% set identifiers = device_attr(
+        binding_target['Zigbee Device / Light'],
+        'identifiers'
+      ) | default([], true) %}
+      {% for identifier in identifiers %}
+        {% if identifier[0] == 'zha' %}
+          {% set ns.ieee = identifier[1] %}
+        {% endif %}
+      {% endfor %}
+      {{ ns.ieee }}
+    {% else %}
+      {{ '' }}
+    {% endif %}
+
+  target_group_id: >-
+    {% if binding_target.active_choice == 'ZHA Zigbee Group' %}
+      {{ binding_target['ZHA Zigbee Group'] }}
+    {% else %}
+      {{ '' }}
+    {% endif %}
+
+sequence:
+  # RD1-Pro v2 binding is performed from endpoint 3.
+  # We explicitly bind On/Off and Level Control only.
+
+  - choose:
+      # ------------------------------------------------------------
+      # Direct device binding
+      # ------------------------------------------------------------
+      - conditions:
+          - condition: template
+            value_template: "{{ target_type | trim == 'device' }}"
+        sequence:
+          - action: zha_toolkit.bind_ieee
+            data:
+              ieee: "{{ rd1p_ieee | trim }}"
+              command_data: "{{ target_ieee | trim }}"
+              endpoint: 3
+              cluster: 6
+              tries: "{{ binding_tries }}"
+
+          - action: zha_toolkit.bind_ieee
+            data:
+              ieee: "{{ rd1p_ieee | trim }}"
+              command_data: "{{ target_ieee | trim }}"
+              endpoint: 3
+              cluster: 8
+              tries: "{{ binding_tries }}"
+
+      # ------------------------------------------------------------
+      # Zigbee group binding
+      # ------------------------------------------------------------
+      - conditions:
+          - condition: template
+            value_template: "{{ target_type | trim == 'group' }}"
+        sequence:
+          - action: zha_toolkit.bind_group
+            data:
+              ieee: "{{ rd1p_ieee | trim }}"
+              command_data: "{{ target_group_id | trim }}"
+              endpoint: 3
+              cluster: 6
+              tries: "{{ binding_tries }}"
+
+          - action: zha_toolkit.bind_group
+            data:
+              ieee: "{{ rd1p_ieee | trim }}"
+              command_data: "{{ target_group_id | trim }}"
+              endpoint: 3
+              cluster: 8
+              tries: "{{ binding_tries }}"
+
+  # Read the RD1-Pro binding table after the request.
+  # This also confirms the device is responding to binding-table requests.
+  - action: zha_toolkit.binds_get
+    continue_on_error: true
+    data:
+      ieee: "{{ rd1p_ieee | trim }}"
+      tries: "{{ binding_tries }}"
+    response_variable: rd1p_binding_table
+
+  # Optional customer feedback.
+  - if:
+      - condition: template
+        value_template: "{{ show_notifications }}"
+    then:
+      - action: persistent_notification.create
+        data:
+          notification_id: "candeo_rd1pv2_zha_binding"
+          title: "RD1-Pro v2 Binding Request Complete"
+          message: >-
+            Binding commands have been sent to the RD1-Pro.
+
+            RD1-Pro:
+            {{ device_name(rd1p_device) }}
+
+            {% if target_type | trim == 'device' %}
+            Target:
+            {{ device_name(target_device_id | trim) }}
+            {% else %}
+            Target:
+            ZHA Zigbee Group {{ target_group_id | trim }}
+            {% endif %}
+
+            Source endpoint:
+            3
+
+            Requested clusters:
+            On/Off (0x0006)
+            Level Control (0x0008)
+
+            You can verify the binding in:
+
+            Settings → Zigbee → Devices → RD1-Pro →
+            Manage Zigbee Device → Bindings
+
+            This functionality requires RD1-Pro v2 firmware
+            (Zigbee v2.0.0 / MCU v2.0.0 or later).

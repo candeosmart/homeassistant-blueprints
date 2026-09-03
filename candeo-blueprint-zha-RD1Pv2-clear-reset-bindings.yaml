@@ -1,0 +1,178 @@
+blueprint:
+  name: Candeo C-ZB-RD1Pv2 - Clear / Reset Direct Bindings in ZHA
+  description: >
+    **Clear customer direct bindings from a Candeo RD1-Pro v2 using ZHA**
+
+    Remove the RD1-Pro's On/Off and Level Control bindings from its dedicated
+    direct-binding endpoint, **endpoint 3**.
+
+    Unlike a full device binding-table wipe, this targeted reset preserves
+    bindings on the RD1-Pro's other endpoints, including ZHA/coordinator
+    bindings used for normal Home Assistant operation.
+
+
+    **V2 FIRMWARE REQUIRED**
+
+    Minimum supported RD1-Pro firmware:
+
+    - **Zigbee firmware: v2.0.0**
+
+    - **MCU firmware: v2.0.0**
+
+    A ZHA/device-handler version containing RD1-Pro v2 support is also required.
+
+
+    **ZHA Toolkit Required**
+
+    This blueprint uses ZHA Toolkit to edit the RD1-Pro binding table.
+
+
+    **What is removed:**
+
+    - Endpoint 3 On/Off bindings (0x0006)
+
+    - Endpoint 3 Level Control bindings (0x0008)
+
+    - Individual-device and group targets using those clusters
+
+
+    **What is preserved:**
+
+    - Bindings on other RD1-Pro endpoints
+
+    - ZHA/coordinator bindings outside endpoint 3
+
+
+    **Use this when:**
+
+    - You want to start again with a clean direct-binding configuration.
+
+    - The previous direct-binding target is unknown.
+
+    - A binding selector has become out of sync.
+
+    - You are troubleshooting direct binding.
+
+
+    **Version**: 2026.8
+
+    **Firmware Requirement**:
+    RD1-Pro v2 - Zigbee v2.0.0 / MCU v2.0.0 or later
+
+  domain: script
+
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    device_section:
+      name: RD1-Pro v2
+      icon: mdi:link-variant-off
+      input:
+        rd1p_device:
+          name: Candeo RD1-Pro v2
+          description: >
+            Select the RD1-Pro running v2 firmware in REM or DPM mode.
+          selector:
+            device:
+              filter:
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-REM
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-DPM
+
+    advanced_section:
+      name: Advanced
+      icon: mdi:cog
+      collapsed: true
+      input:
+        binding_tries:
+          name: Binding Attempts
+          default: 3
+          selector:
+            number:
+              min: 1
+              max: 10
+              step: 1
+              mode: box
+
+    feedback_section:
+      name: Feedback
+      icon: mdi:message-check
+      collapsed: true
+      input:
+        show_notifications:
+          name: Show Result Notification
+          default: true
+          selector:
+            boolean:
+
+mode: single
+max_exceeded: silent
+
+variables:
+  rd1p_device: !input rd1p_device
+  binding_tries: !input binding_tries
+  show_notifications: !input show_notifications
+
+  rd1p_ieee: >-
+    {% set ns = namespace(value='') %}
+    {% set identifiers = device_attr(rd1p_device, 'identifiers') | default([], true) %}
+    {% for identifier in identifiers %}
+      {% if identifier[0] == 'zha' %}
+        {% set ns.value = identifier[1] %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.value }}
+
+sequence:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ rd1p_ieee | trim | length == 0 }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ show_notifications }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  notification_id: candeo_rd1pv2_zha_binding_reset
+                  title: RD1-Pro Binding Reset - Device Not Resolved
+                  message: >-
+                    The ZHA IEEE address for the selected RD1-Pro could not be resolved.
+          - stop: RD1-Pro ZHA device could not be resolved.
+            error: true
+
+  - action: zha_toolkit.binds_remove_all
+    data:
+      ieee: "{{ rd1p_ieee | trim }}"
+      endpoint: 3
+      cluster:
+        - 6
+        - 8
+      tries: "{{ binding_tries | int }}"
+
+  - if:
+      - condition: template
+        value_template: "{{ show_notifications }}"
+    then:
+      - action: persistent_notification.create
+        data:
+          notification_id: candeo_rd1pv2_zha_binding_reset
+          title: RD1-Pro Direct Bindings Reset
+          message: >-
+            The endpoint 3 direct-binding reset command has completed.
+
+            RD1-Pro:
+            {{ device_name(rd1p_device) }}
+
+            Targeted clusters:
+            On/Off (0x0006)
+            Level Control (0x0008)
+
+            Bindings on other RD1-Pro endpoints were not targeted.
+
+            You can verify the result in the RD1-Pro binding table in ZHA.

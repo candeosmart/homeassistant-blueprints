@@ -1,0 +1,162 @@
+blueprint:
+  name: Candeo C-ZB-RD1Pv2 - Bound Light + Extra Actions in zigbee2mqtt
+  description: >
+    **Combine direct Zigbee light control with Home Assistant actions**
+
+    Use an RD1-Pro v2 with an existing direct Zigbee binding while
+    assigning additional Home Assistant actions to double press,
+    hold and release.
+
+
+    **Direct Zigbee Control:**
+
+    - 💡 Single press → toggles the bound light/group directly
+    - 🎚️ Rotary control → dims the bound light/group directly
+
+    These controls do not depend on Home Assistant processing the commands.
+
+
+    **Home Assistant Extra Actions:**
+
+    - 👆👆 Double press → custom action
+    - ✋ Hold → custom action
+    - 👋 Release → custom action
+
+
+    ⚠️ **V2 FIRMWARE REQUIRED**
+
+    Minimum RD1-Pro firmware:
+
+    - Zigbee firmware v2.0.0
+    - MCU firmware v2.0.0
+
+    A zigbee2mqtt version containing RD1-Pro v2 support is required.
+
+
+    **🛠️ Setup Required:**
+
+    First create the direct binding using the Candeo:
+
+    **RD1-Pro – Bind to Light or Zigbee Group**
+
+    blueprint or script.
+
+    Then use this blueprint to assign the additional button actions.
+
+
+    **Important Notes:**
+
+    - The RD1-Pro should be in REM or DPM mode.
+    - The light/group binding itself is not created by this blueprint.
+    - Single press and rotation are intentionally not handled by Home Assistant.
+    - Double press, hold and release remain available for automations.
+    - Extra actions can control any Home Assistant device, scene, script,
+      automation or service.
+
+
+    **Version**: 2026.8
+
+    **Firmware Requirement**:
+    RD1-Pro v2 — Zigbee v2.0.0 / MCU v2.0.0 or later
+
+  domain: automation
+
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    device_section:
+      name: RD1-Pro
+      icon: mdi:knob
+      input:
+        remote_device:
+          name: Candeo RD1-Pro v2
+          description: >
+            Select the RD1-Pro with an existing direct binding.
+            It must be running v2 firmware in REM or DPM mode.
+
+            Some zigbee2mqtt versions may display the older model identifier
+            even when v2 firmware is installed.
+          selector:
+            device:
+              filter:
+                - model_id: C-ZB-RD1P-REM
+                - model_id: C-ZB-RD1P-DPM
+                - model_id: C-ZB-RD1Pv2-REM
+                - model_id: C-ZB-RD1Pv2-DPM
+
+    actions_section:
+      name: Extra Actions
+      icon: mdi:gesture-double-tap
+      description: >
+        Choose what Home Assistant should do for the additional
+        RD1-Pro button commands.
+      input:
+        on_double_press:
+          name: Double Press – Actions
+          description: >
+            Actions to run when the RD1-Pro knob is double pressed.
+          default: []
+          selector:
+            action: {}
+
+        on_hold:
+          name: Hold – Actions
+          description: >
+            Actions to run when the RD1-Pro knob is held.
+          default: []
+          selector:
+            action: {}
+
+        on_release:
+          name: Release – Actions
+          description: >
+            Actions to run when the RD1-Pro knob is released.
+          default: []
+          selector:
+            action: {}
+
+mode: parallel
+max: 10
+max_exceeded: silent
+
+triggers:
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: double_pressed
+    id: double_pressed
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: held
+    id: held
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: mqtt
+    type: action
+    subtype: released
+    id: released
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: double_pressed
+        sequence: !input on_double_press
+
+      - conditions:
+          - condition: trigger
+            id: held
+        sequence: !input on_hold
+
+      - conditions:
+          - condition: trigger
+            id: released
+        sequence: !input on_release

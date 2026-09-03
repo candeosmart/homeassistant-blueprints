@@ -1,0 +1,166 @@
+alias: Candeo RD1-Pro v2 - Unbind from Light or Zigbee Group
+description: >-
+  Removes a direct Zigbee binding between a Candeo RD1-Pro v2 and either
+  another ZHA Zigbee device or a ZHA Zigbee group.
+
+  REQUIRES RD1-PRO V2 FIRMWARE:
+  Zigbee v2.0.0 / MCU v2.0.0 or later.
+
+  REQUIRES ZHA TOOLKIT.
+
+  Only bindings from endpoint 3 are removed.
+icon: mdi:link-variant-off
+
+fields:
+  rd1p_reference:
+    name: RD1-Pro Reference
+    description: >-
+      ZHA entity ID, Home Assistant device UUID, or IEEE address for the
+      RD1-Pro v2.
+    required: true
+    example: "sensor.kitchen_dimmer_linkquality"
+    selector:
+      text:
+
+  target_type:
+    name: Target Type
+    required: true
+    default: device
+    selector:
+      select:
+        options:
+          - label: ZHA Device / Light
+            value: device
+          - label: ZHA Zigbee Group
+            value: group
+
+  target_reference:
+    name: Target Reference
+    description: >-
+      For a device, use a ZHA entity ID, Home Assistant device UUID,
+      or IEEE address. For a group, enter the Zigbee Group ID such as 0x1234.
+    required: true
+    selector:
+      text:
+
+  binding_tries:
+    name: Binding Attempts
+    required: false
+    default: 3
+    selector:
+      number:
+        min: 1
+        max: 10
+        step: 1
+        mode: box
+
+  show_notifications:
+    name: Show Result Notification
+    required: false
+    default: true
+    selector:
+      boolean:
+
+sequence:
+  - variables:
+      rd1p_ref: >-
+        {{ rd1p_reference | default('', true) | string | trim }}
+      target_kind: >-
+        {{ target_type | default('', true) | string | trim | lower }}
+      target_ref: >-
+        {{ target_reference | default('', true) | string | trim }}
+      tries_count: "{{ binding_tries | default(3) | int }}"
+      show_feedback: "{{ show_notifications | default(true) | bool }}"
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                rd1p_ref | length == 0
+                or target_ref | length == 0
+                or target_kind not in ['device', 'group']
+              }}
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ show_feedback }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  notification_id: candeo_rd1pv2_zha_unbinding
+                  title: RD1-Pro Unbinding - Missing Information
+                  message: >-
+                    One or more required values were not supplied.
+
+                    RD1-Pro:
+                    {{ rd1p_ref if rd1p_ref else 'NOT PROVIDED' }}
+
+                    Target type:
+                    {{ target_kind if target_kind else 'NOT PROVIDED' }}
+
+                    Target:
+                    {{ target_ref if target_ref else 'NOT PROVIDED' }}
+          - stop: RD1-Pro reference, target type and target reference are required.
+            error: true
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ target_kind == 'device' }}"
+        sequence:
+          - action: zha_toolkit.binds_remove_all
+            data:
+              ieee: "{{ rd1p_ref }}"
+              command_data: "{{ target_ref }}"
+              endpoint: 3
+              cluster:
+                - 6
+                - 8
+              tries: "{{ tries_count }}"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ target_kind == 'group' }}"
+        sequence:
+          - action: zha_toolkit.unbind_group
+            data:
+              ieee: "{{ rd1p_ref }}"
+              command_data: "{{ target_ref }}"
+              endpoint: 3
+              cluster: 6
+              tries: "{{ tries_count }}"
+
+          - action: zha_toolkit.unbind_group
+            data:
+              ieee: "{{ rd1p_ref }}"
+              command_data: "{{ target_ref }}"
+              endpoint: 3
+              cluster: 8
+              tries: "{{ tries_count }}"
+
+  - if:
+      - condition: template
+        value_template: "{{ show_feedback }}"
+    then:
+      - action: persistent_notification.create
+        data:
+          notification_id: candeo_rd1pv2_zha_unbinding
+          title: RD1-Pro Unbinding Request Complete
+          message: >-
+            The endpoint 3 unbinding commands have completed.
+
+            RD1-Pro:
+            {{ rd1p_ref }}
+
+            Target:
+            {{ target_ref }}
+
+            Requested clusters:
+            On/Off (0x0006)
+            Level Control (0x0008)
+
+            Verify the result in the RD1-Pro binding table in ZHA.
+
+mode: single
+max_exceeded: silent

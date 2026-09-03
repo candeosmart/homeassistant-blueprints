@@ -1,0 +1,260 @@
+blueprint:
+  name: Candeo C-ZB-RD1Pv2 (DIM mode) - Blinds / Curtains Control in ZHA
+  description: >
+    **Control blinds, curtains or another Home Assistant cover from an RD1-Pro v2 in DIM Mode using ZHA**
+
+    Keep normal local control of the RD1-Pro's wired light while using the
+    v2 Extra Button Commands to operate a selected cover.
+
+
+    **Controls:**
+
+    - 💡 **Single press**: Continues to control the RD1-Pro wired light locally
+
+    - 🎚️ **Rotary control**: Continues to dim the RD1-Pro wired light locally
+
+    - 👆👆 **Double press**: Opens or closes the selected cover fully
+
+    - ✋ **Hold**: Starts moving the cover for manual positioning
+
+    - 👋 **Release**: Stops the cover at its current position
+
+
+    **Direction Logic:**
+
+    For covers that report a position, the configurable position threshold
+    determines the direction:
+
+    - At or below the threshold → move **open**
+
+    - Above the threshold → move **closed**
+
+    For covers without position reporting, the current open/closed state is
+    used instead.
+
+
+    ⚠️ **V2 FIRMWARE REQUIRED**
+
+    Minimum supported RD1-Pro firmware:
+
+    - **Zigbee firmware: v2.0.0**
+
+    - **MCU firmware: v2.0.0**
+
+    A ZHA/device-handler version containing RD1-Pro v2 support is also required.
+
+
+    **Extra Button Commands must be enabled:**
+
+    Open the RD1-Pro device in Home Assistant and set
+    **Extra button commands** to **Enabled**.
+
+    Enabling Extra Button Commands introduces approximately a 0.5 second
+    delay to normal single-press detection so that a double press can be
+    recognised.
+
+
+    **Important Notes:**
+
+    - This blueprint is specifically for **DIM Mode**.
+
+    - Double press requests a full open or close movement.
+
+    - Hold starts movement in the automatically selected direction and
+      Release sends `cover.stop_cover`, making partial positioning easy.
+
+    - The selected cover must support the relevant open/close/stop functions.
+
+
+    **Version**: 2026.8
+
+    **Firmware Requirement**:
+    RD1-Pro v2 - Zigbee v2.0.0 / MCU v2.0.0 or later
+
+    **Compatible Device**:
+    Candeo C-ZB-RD1Pv2-DIM
+
+  domain: automation
+
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    device_section:
+      name: RD1-Pro v2
+      icon: mdi:knob
+      input:
+        remote_device:
+          name: Candeo RD1-Pro v2 (DIM Mode)
+          description: >
+            Select the RD1-Pro running v2 firmware in DIM Mode.
+            Extra Button Commands must be enabled on the ZHA device.
+          selector:
+            device:
+              filter:
+                - integration: zha
+                  manufacturer: Candeo
+                  model: C-ZB-RD1Pv2-DIM
+
+    cover_section:
+      name: Blind / Curtain
+      icon: mdi:blinds-horizontal
+      description: >
+        Choose the cover to operate with the RD1-Pro Extra Button Commands.
+      input:
+        target_cover:
+          name: Cover Entity
+          description: >
+            Select the blind, curtain, shade or other Home Assistant cover.
+          selector:
+            entity:
+              filter:
+                - domain: cover
+
+        position_threshold:
+          name: Direction Threshold
+          description: >
+            For covers with position reporting: at or below this position the
+            next movement is Open; above it the next movement is Close.
+          default: 50
+          selector:
+            number:
+              min: 1
+              max: 99
+              step: 1
+              unit_of_measurement: "%"
+              mode: slider
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  target_cover: !input target_cover
+  position_threshold: !input position_threshold
+
+triggers:
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_double_press
+    subtype: rotary_knob
+    id: double_pressed
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_long_press
+    subtype: rotary_knob
+    id: held
+
+  - trigger: device
+    device_id: !input remote_device
+    domain: zha
+    type: remote_button_long_release
+    subtype: rotary_knob
+    id: released
+
+condition: []
+
+action:
+  - choose:
+      # ------------------------------------------------------------
+      # Double press -> full open / full close
+      # ------------------------------------------------------------
+      - conditions:
+          - condition: trigger
+            id: double_pressed
+        sequence:
+          - choose:
+              # Position-aware direction where available.
+              - conditions:
+                  - condition: template
+                    value_template: >-
+                      {{ state_attr(target_cover, 'current_position') is not none }}
+                sequence:
+                  - if:
+                      - condition: template
+                        value_template: >-
+                          {{
+                            (state_attr(target_cover, 'current_position') | int(0))
+                            <= (position_threshold | int)
+                          }}
+                    then:
+                      - action: cover.open_cover
+                        target:
+                          entity_id: !input target_cover
+                    else:
+                      - action: cover.close_cover
+                        target:
+                          entity_id: !input target_cover
+
+            # Fallback for covers without position reporting.
+            default:
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ states(target_cover) in ['closed', 'closing'] }}
+                then:
+                  - action: cover.open_cover
+                    target:
+                      entity_id: !input target_cover
+                else:
+                  - action: cover.close_cover
+                    target:
+                      entity_id: !input target_cover
+
+      # ------------------------------------------------------------
+      # Hold -> start movement for manual positioning
+      # ------------------------------------------------------------
+      - conditions:
+          - condition: trigger
+            id: held
+        sequence:
+          - choose:
+              # Position-aware direction where available.
+              - conditions:
+                  - condition: template
+                    value_template: >-
+                      {{ state_attr(target_cover, 'current_position') is not none }}
+                sequence:
+                  - if:
+                      - condition: template
+                        value_template: >-
+                          {{
+                            (state_attr(target_cover, 'current_position') | int(0))
+                            <= (position_threshold | int)
+                          }}
+                    then:
+                      - action: cover.open_cover
+                        target:
+                          entity_id: !input target_cover
+                    else:
+                      - action: cover.close_cover
+                        target:
+                          entity_id: !input target_cover
+
+            # Fallback for covers without position reporting.
+            default:
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ states(target_cover) in ['closed', 'closing'] }}
+                then:
+                  - action: cover.open_cover
+                    target:
+                      entity_id: !input target_cover
+                else:
+                  - action: cover.close_cover
+                    target:
+                      entity_id: !input target_cover
+
+      # ------------------------------------------------------------
+      # Release -> stop at current position
+      # ------------------------------------------------------------
+      - conditions:
+          - condition: trigger
+            id: released
+        sequence:
+          - action: cover.stop_cover
+            target:
+              entity_id: !input target_cover
