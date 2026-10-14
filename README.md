@@ -335,16 +335,25 @@ Return the RD1-Pro's customer-created direct-binding configuration to a clean st
 
 ## Modmote Scene Switch Blueprint ##
 
-A Blueprint to allow easy scene switch configuration for your Candeo Modmote, with press, double press, and hold - for each of the 4 buttons.
+Configure all 12 actions on the Candeo Modmote CMM-1: single press, double press, and long press for each of its four buttons.
 
-**ZHA**
+### Zigbee2MQTT (v2 — recommended) ###
 
-[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-modmote-blueprint-zha.yaml)
+The modern Zigbee2MQTT blueprint uses **MQTT device triggers**, without requiring legacy action sensors. Requires Home Assistant 2024.6.0 or newer.
 
+1. Pair the Modmote with Zigbee2MQTT and set its **operation_mode** to **event** (not command).
+2. Perform each button action at least once (single, double, and long press on buttons 1–4). Zigbee2MQTT discovers MQTT device triggers only after they have been generated; long press takes about 3 seconds.
+3. Import the v2 blueprint, select the Modmote **MQTT device** (not a sensor), and configure actions under each button's section.
 
-**zigbee2mqtt**
+[![Import Candeo Modmote Zigbee2MQTT v2 blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-modmote-blueprint-zigbee2mqtt-v2.yaml)
 
-[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-modmote-blueprint-zigbee2mqtt.yaml)
+### Zigbee2MQTT (legacy) ###
+
+The [original Zigbee2MQTT blueprint](https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-modmote-blueprint-zigbee2mqtt.yaml) is retained for existing installations. It uses a deprecated `sensor.*_action` entity and requires `homeassistant.legacy_action_sensor: true` in Zigbee2MQTT. New installations should use v2.
+
+### ZHA ###
+
+[![Import Candeo Modmote ZHA blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/candeosmart/homeassistant-blueprints/blob/main/candeo-modmote-blueprint-zha.yaml)
 
 
 
